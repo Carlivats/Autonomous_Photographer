@@ -1,7 +1,7 @@
 ## 3D Printed Parts
 
 The .pwmx files in this directory were used to fabricate prototype components for this project.
-If you rather see the STL files you might find them [here](https://github.com/Carlivats/Autonomous_Photographer/tree/main/src/hardware/stl)
+If you rather see the STL files you might find them [here](https://github.com/Carlivats/Autonomous_Photographer/tree/main/hardware/stl)
 
 They were printed on the hardware listed below and may require adjustment to work correctly on other printers or setups.
 
