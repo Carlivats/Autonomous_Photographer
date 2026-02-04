@@ -30,6 +30,6 @@ def get_exposure_score(image):
 if __name__ == "__main__":
     frame = cv2.imread('./images/test.jpg') 
 
-    brightness, exposure_label = get_exposure_score(frame)
-    print(f"Average Brightness: {brightness:.2f}")
+    exposure_score, exposure_label = get_exposure_score(frame)
+    print(f"Average Exposure: {exposure_score:.2f}")
     print(f"Status: {exposure_label}")
