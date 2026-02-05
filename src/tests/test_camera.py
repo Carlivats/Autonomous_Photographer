@@ -15,7 +15,7 @@ time.sleep(5)
 if not os.path.exists("images"):
     os.makedirs("images")
 
-picam2.capture_file("images/test.jpg")
+picam2.capture_file("images/test4.jpg")
 
 # Stop the camera
 picam2.stop()
