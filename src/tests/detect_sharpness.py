@@ -1,9 +1,13 @@
+import sys
 import time
 import numpy as np
 import cv2
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from picamera2 import Picamera2, MappedArray
 from picamera2.devices.imx500 import IMX500
-from get_sharpness_score import get_subject_sharpness
+from src.get_sharpness_score import get_subject_sharpness
 
 model_path = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
 model = IMX500(model_path)
