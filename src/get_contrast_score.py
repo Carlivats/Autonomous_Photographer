@@ -1,23 +1,26 @@
 import cv2
 import numpy as np
 
-def get_contrast_score(image):
+def get_contrast_score(roi):
     """
     Calculates the RMS (Root Mean Square) contrast of an image.
     Higher value = Higher contrast.
     """
-    # Convert to grayscale because contrast is about light intensity, not color.
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # 2. Calculate Standard Deviation (RMS Contrast)
+    # Calculate Standard Deviation (RMS Contrast)
     # std_dev measures how spread out the pixel brightness values are.
-    _, std_dev = cv2.meanStdDev(gray)
+    _, contrast = cv2.meanStdDev(roi)
 
     # The standard deviation is our contrast metric.
+
     # We flatten the result to get a simple float number.
-    contrast_score = std_dev[0][0]
+    contrast = contrast[0][0]
+
+    if contrast < 30: status = "Very Low"
+    elif contrast < 50: status = "Low/Med"
+    elif contrast < 80: status = "Good"
+    else: status = "High"
     
-    return contrast_score
+    return contrast, status
 
 # --- Example ---
 if __name__ == "__main__":
