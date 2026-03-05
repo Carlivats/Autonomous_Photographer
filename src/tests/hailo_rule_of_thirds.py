@@ -30,6 +30,10 @@ GAIN_PAN = 0.5   # Lower = Smoother, Higher = Snappier
 GAIN_TILT = 0.15  
 DEADZONE = 0.03   # 3% of the screen center is "safe"
 last_predictions = None
+INTERSECTIONS = [
+    (0.33, 0.33), (0.66, 0.33),
+    (0.33, 0.66), (0.66, 0.66)
+]
 
 def draw_and_track(request):
     global pan_angle, tilt_angle
@@ -51,21 +55,22 @@ def draw_and_track(request):
                     if confidence > 0.6: # Higher threshold for movement stability
                         person_kps = keypoints[best_idx].reshape(-1, 2)
                         
-                        # 2. Get Normalized Coordinates (0.0 to 1.0)
-                        # Hailo returns coords relative to model_size (model_w, model_h)
+                        # 2. Get Normalized Coordinates
                         norm_x = person_kps[0][0] / model_w
                         norm_y = person_kps[0][1] / model_h
-                        
-                        # 3. Calculate Error relative to center (0.5, 0.5)
-                        err_x = norm_x - 0.5
-                        err_y = norm_y - 0.5
 
-                        # 4. Smooth Servo Logic
-                        # Only move if error is outside the 3% deadzone
+                        # 3. Find the closest Rule of Thirds intersection
+                        # We find the intersection point with the smallest Euclidean distance to the nose
+                        best_target = min(INTERSECTIONS, key=lambda p: np.sqrt((norm_x - p[0])**2 + (norm_y - p[1])**2))
+                        target_x, target_y = best_target
+
+                        # Calculate Error relative to the chosen intersection
+                        err_x = norm_x - target_x
+                        err_y = norm_y - target_y
+
+                        # 4. Smooth Servo Logic (Same as before, but using new err_x/y)
                         if abs(err_x) > DEADZONE:
-                            # We subtract for pan because camera usually moves 
-                            # opposite to pixel direction for centering
-                            pan_angle -= (err_x * 15 * GAIN_PAN) # Scale error to degrees
+                            pan_angle -= (err_x * 15 * GAIN_PAN)
                             pan_angle = np.clip(pan_angle, 0, 180)
                             kit.servo[0].angle = pan_angle
                         
@@ -74,13 +79,16 @@ def draw_and_track(request):
                             tilt_angle = np.clip(tilt_angle, 0, 180)
                             kit.servo[1].angle = tilt_angle
 
-                        # 5. Visuals (scaled for your 1024x768 display)
-                        px_x, px_y = int(norm_x * WIDTH), int(norm_y * HEIGHT)
-                        color = (0, 255, 0) if (abs(err_x) < DEADZONE and abs(err_y) < DEADZONE) else (0, 200, 255)
-                        cv2.circle(m.array, (px_x, px_y), 8, color, -1)
-                        cv2.putText(m.array, "STABLE" if color == (0, 255, 0) else "MOVING", 
-                                    (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-
+                        # 5. Visuals: Draw the Grid and the Target
+                        # Draw vertical lines
+                        cv2.line(m.array, (int(WIDTH * 0.33), 0), (int(WIDTH * 0.33), HEIGHT), (100, 100, 100), 1)
+                        cv2.line(m.array, (int(WIDTH * 0.66), 0), (int(WIDTH * 0.66), HEIGHT), (100, 100, 100), 1)
+                        # Draw horizontal lines
+                        cv2.line(m.array, (0, int(HEIGHT * 0.33)), (WIDTH, int(HEIGHT * 0.33)), (100, 100, 100), 1)
+                        cv2.line(m.array, (0, int(HEIGHT * 0.66)), (WIDTH, int(HEIGHT * 0.66)), (100, 100, 100), 1)
+                        
+                        # Highlight the active target intersection
+                        cv2.circle(m.array, (int(target_x * WIDTH), int(target_y * HEIGHT)), 15, (255, 255, 0), 2)
             except Exception as e:
                 pass
 

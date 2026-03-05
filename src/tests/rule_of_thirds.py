@@ -57,7 +57,7 @@ def track_rule_of_thirds(request):
                 x, y, w, h = model.convert_inference_coords(boxes[best_idx], metadata, picam2)
                 subj_cx, subj_cy = x + (w // 2), y + (h // 2)
 
-                # 3. Find the CLOSEST Power Point to the subject
+                # 3. Find the CLOSEST Point to the subject
                 distances = [np.sqrt((subj_cx - px)**2 + (subj_cy - py)**2) for px, py in POWER_POINTS]
                 closest_point_idx = np.argmin(distances)
                 target_x, target_y = POWER_POINTS[closest_point_idx]
