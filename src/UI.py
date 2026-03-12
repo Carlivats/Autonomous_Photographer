@@ -1,6 +1,7 @@
 import sys
 import time
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout
+import cv2
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QImage, QPixmap
 from picamera2 import Picamera2
@@ -15,6 +16,7 @@ class CameraWorker(QThread):
         self.picam2 = Picamera2()
 
     def run(self):
+        # Configure the camera
         config = self.picam2.create_video_configuration(
             {"size": (640, 480), "format": "RGB888"}
         )
@@ -24,27 +26,23 @@ class CameraWorker(QThread):
         # Continuous capture loop in the background
         while self._run_flag:
             try:
-                # Grab the frame array
                 frame = self.picam2.capture_array("main")
                 
-                # Convert the NumPy array to a PyQt QImage
+                # --- ADD THIS LINE TO FIX THE COLORS ---
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
                 h, w, ch = frame.shape
                 bytes_per_line = ch * w
                 q_img = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
                 
-                # Emit the signal to send the image to the main GUI
                 self.change_pixmap_signal.emit(q_img)
-                
-                # Small sleep to yield resources and hit roughly 30-60 FPS
                 time.sleep(0.03) 
             except Exception as e:
                 print(f"Frame capture error: {e}")
 
-        # Clean up when the thread stops
         self.picam2.stop()
 
     def stop(self):
-        # Gracefully break the while loop
         self._run_flag = False
         self.wait()
 
@@ -54,48 +52,94 @@ class AutonomousPhotographerUI(QWidget):
         super().__init__()
         self.setWindowTitle("Autonomous Photographer")
         
-        # Make the window fullscreen for the Pi touchscreen
         self.showFullScreen()
-        self.setStyleSheet("background-color: black;")
+        self.setStyleSheet("background-color: #16181d;")
 
-        # Create a layout to stack widgets vertically
-        layout = QVBoxLayout()
+        # --- Main Horizontal Layout ---
+        main_layout = QHBoxLayout()
+        self.setLayout(main_layout)
 
-        # Create the label that will hold the video frames
+        # --- Left Side: Video Feed ---
         self.video_label = QLabel(self)
         self.video_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.video_label)
+        self.video_label.setStyleSheet("background-color: black; border: 2px solid #1c2024;")
+        main_layout.addWidget(self.video_label, stretch=3)
 
-        # Create a touch-friendly exit button
-        self.exit_btn = QPushButton("Exit Preview", self)
-        self.exit_btn.setStyleSheet("""
+        # --- Right Side: Control Panel ---
+        control_layout = QVBoxLayout()
+        
+        button_style = """
             QPushButton {
-                background-color: #e74c3c;
+                background-color: #1c2024;
                 color: white;
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: bold;
-                padding: 20px;
-                border-radius: 10px;
+                padding: 15px;
+                border-radius: 8px;
             }
-        """)
-        self.exit_btn.clicked.connect(self.close_app)
-        layout.addWidget(self.exit_btn)
+            QPushButton:pressed {
+                background-color: #525a70;
+            }
+        """
 
-        self.setLayout(layout)
+        self.btn_start = QPushButton("Start Session", self)
+        self.btn_start.setStyleSheet(button_style.replace("#1c2024", "#fed766").replace("#525a70", "#fed766").replace("white", "black"))
+        self.btn_start.clicked.connect(self.start_session)
+        control_layout.addWidget(self.btn_start)
+
+        self.btn_stop = QPushButton("Stop Session", self)
+        self.btn_stop.setStyleSheet(button_style)
+        self.btn_stop.clicked.connect(self.stop_session)
+        self.btn_stop.setEnabled(False)
+        control_layout.addWidget(self.btn_stop)
+
+        control_layout.addStretch()
+
+        self.btn_settings = QPushButton("Settings", self)
+        self.btn_settings.setStyleSheet(button_style)
+        self.btn_settings.clicked.connect(self.open_settings)
+        control_layout.addWidget(self.btn_settings)
+
+        self.btn_gallery = QPushButton("Gallery", self)
+        self.btn_gallery.setStyleSheet(button_style)
+        self.btn_gallery.clicked.connect(self.open_gallery)
+        control_layout.addWidget(self.btn_gallery)
+
+        self.btn_exit = QPushButton("Exit App", self)
+        self.btn_exit.setStyleSheet(button_style.replace("#1c2024", "#e74c3c").replace("#525a70", "#c0392b"))
+        self.btn_exit.clicked.connect(self.close_app)
+        control_layout.addWidget(self.btn_exit)
+
+        main_layout.addLayout(control_layout, stretch=1)
 
         # --- Initialize and Start the Camera Thread ---
         self.thread = CameraWorker()
-        # Connect the thread's signal to our update_image slot
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.start()
 
+    # --- UI Slots (Actions) ---
     def update_image(self, q_img):
-        """This slot receives the QImage and displays it."""
-        # Convert QImage to QPixmap and set it on the label
-        self.video_label.setPixmap(QPixmap.fromImage(q_img))
+        pixmap = QPixmap.fromImage(q_img)
+        scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.video_label.setPixmap(scaled_pixmap)
+
+    def start_session(self):
+        print("Starting autonomous session...")
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+
+    def stop_session(self):
+        print("Stopping autonomous session...")
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+
+    def open_settings(self):
+        print("Opening Settings...")
+
+    def open_gallery(self):
+        print("Opening Gallery...")
 
     def close_app(self):
-        """Safely shut down the worker thread before closing."""
         self.thread.stop()
         self.close()
 
