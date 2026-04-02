@@ -21,7 +21,7 @@ class CameraWorker(QThread):
     def __init__(self, model_path):
         super().__init__()
         self._run_flag = True
-        self.is_tracking = False  # --- NEW: Toggle for tracking state ---
+        self.is_tracking = False 
         self.model_path = model_path
         self.picam2 = Picamera2()
 
@@ -38,14 +38,21 @@ class CameraWorker(QThread):
         self.GAIN_PAN = 0.5
         self.GAIN_TILT = 0.15  
         self.DEADZONE = 0.03
+        
+        # --- Composition Targets ---
+        self.CENTER_TARGET = (0.5, 0.5)
+        self.INTERSECTIONS = [
+            (0.33, 0.33), (0.66, 0.33),
+            (0.33, 0.66), (0.66, 0.66)
+        ]
+        self.THIRDS_BIAS = 0.6
+        self.active_mode = "CENTER"  # or "THIRDS"
 
     def run(self):
-        # Initialize Hailo inside the thread
         with Hailo(self.model_path) as hailo:
             model_h, model_w, _ = hailo.get_input_shape()
             model_size = (model_w, model_h)
 
-            # Configure the camera with both main and lores streams
             config = self.picam2.create_video_configuration(
                 main={"size": (self.WIDTH, self.HEIGHT), "format": "RGB888"},
                 lores={"size": model_size, "format": "RGB888"}
@@ -56,15 +63,10 @@ class CameraWorker(QThread):
             # Continuous capture loop
             while self._run_flag:
                 try:
-                    # Capture the high-res frame for the UI
                     main_frame = self.picam2.capture_array("main")
                     
                     # --- AI TRACKING LOGIC ---
                     if self.is_tracking:
-                        # Draw Center Guide
-                        cv2.drawMarker(main_frame, (self.FRAME_CX, self.FRAME_CY), (100, 100, 100), cv2.MARKER_CROSS, 20, 1)
-
-                        # Capture low-res frame and run inference
                         lores_frame = self.picam2.capture_array("lores")
                         raw_detections = hailo.run(lores_frame)
                         predictions = postproc_yolov8_pose(1, raw_detections, model_size)
@@ -73,22 +75,47 @@ class CameraWorker(QThread):
                             scores = predictions['scores']
                             keypoints = predictions['keypoints']
 
-                            # 1. Get the most confident person
                             best_idx = np.argmax(scores.flatten())
                             confidence = scores.flatten()[best_idx]
 
                             if confidence > 0.6:
                                 person_kps = keypoints[best_idx].reshape(-1, 2)
                                 
-                                # 2. Get Normalized Coordinates
+                                # 1. Get Normalized Coordinates
                                 norm_x = person_kps[0][0] / model_w
                                 norm_y = person_kps[0][1] / model_h
                                 
-                                # 3. Calculate Error relative to center
-                                err_x = norm_x - 0.5
-                                err_y = norm_y - 0.5
+                                # 2. Calculate true distance to Center
+                                dist_to_center = np.sqrt((norm_x - self.CENTER_TARGET[0])**2 + (norm_y - self.CENTER_TARGET[1])**2)
 
-                                # 4. Smooth Servo Logic
+                                # 3. Calculate true distance to closest Rule of Thirds intersection
+                                best_rot = min(self.INTERSECTIONS, key=lambda p: np.sqrt((norm_x - p[0])**2 + (norm_y - p[1])**2))
+                                dist_to_rot = np.sqrt((norm_x - best_rot[0])**2 + (norm_y - best_rot[1])**2)
+
+                                # --- THE MAGIC TWEAKS ---
+
+                                # Tweak A: Apply a bias to favor the Rule of Thirds. 
+                                # Multiplying the RoT distance by 0.7 tricks the AI into thinking it's shorter.
+                                biased_dist_to_rot = dist_to_rot * 0.7 
+
+                                # Tweak B: Hysteresis (Stickiness). 
+                                # If we are ALREADY in Thirds mode, make it even harder to snap back to Center.
+                                if self.active_mode == "THIRDS":
+                                    biased_dist_to_rot *= 0.8 # An extra 20% bias to stay locked onto Thirds
+
+                                # 4. Decide which composition target is closer using the Biased distance
+                                if dist_to_center < biased_dist_to_rot:
+                                    target_x, target_y = self.CENTER_TARGET
+                                    self.active_mode = "CENTER"
+                                else:
+                                    target_x, target_y = best_rot
+                                    self.active_mode = "THIRDS"
+
+                                # 5. Calculate Error relative to the chosen target
+                                err_x = norm_x - target_x
+                                err_y = norm_y - target_y
+
+                                # 6. Smooth Servo Logic
                                 if abs(err_x) > self.DEADZONE:
                                     self.pan_angle -= (err_x * 15 * self.GAIN_PAN)
                                     self.pan_angle = np.clip(self.pan_angle, 0, 180)
@@ -99,12 +126,25 @@ class CameraWorker(QThread):
                                     self.tilt_angle = np.clip(self.tilt_angle, 0, 180)
                                     self.kit.servo[1].angle = self.tilt_angle
 
-                                # 5. Visuals
+                                # 7. Visuals
+                                # Draw the appropriate guide based on the active mode
+                                if self.active_mode == "CENTER":
+                                    cv2.drawMarker(main_frame, (self.FRAME_CX, self.FRAME_CY), (100, 100, 100), cv2.MARKER_CROSS, 20, 1)
+                                else:
+                                    cv2.line(main_frame, (int(self.WIDTH * 0.33), 0), (int(self.WIDTH * 0.33), self.HEIGHT), (100, 100, 100), 1)
+                                    cv2.line(main_frame, (int(self.WIDTH * 0.66), 0), (int(self.WIDTH * 0.66), self.HEIGHT), (100, 100, 100), 1)
+                                    cv2.line(main_frame, (0, int(self.HEIGHT * 0.33)), (self.WIDTH, int(self.HEIGHT * 0.33)), (100, 100, 100), 1)
+                                    cv2.line(main_frame, (0, int(self.HEIGHT * 0.66)), (self.WIDTH, int(self.HEIGHT * 0.66)), (100, 100, 100), 1)
+
+                                # Highlight the chosen target and person location
                                 px_x, px_y = int(norm_x * self.WIDTH), int(norm_y * self.HEIGHT)
                                 color = (0, 255, 0) if (abs(err_x) < self.DEADZONE and abs(err_y) < self.DEADZONE) else (0, 200, 255)
+                                
+                                # Draw target circle
+                                cv2.circle(main_frame, (int(target_x * self.WIDTH), int(target_y * self.HEIGHT)), 15, (255, 255, 0), 2)
+                                # Draw person node
                                 cv2.circle(main_frame, (px_x, px_y), 8, color, -1)
-                                cv2.putText(main_frame, "STABLE" if color == (0, 255, 0) else "MOVING", 
-                                            (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                                cv2.putText(main_frame, self.active_mode, (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
                     # --- UI UPDATE LOGIC ---
                     h, w, ch = main_frame.shape
