@@ -1,10 +1,11 @@
 import sys
 import time
 import cv2
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QSizePolicy
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QImage, QPixmap
 from picamera2 import Picamera2
+
 
 class CameraWorker(QThread):
     # This signal will carry the QImage from the background thread to the GUI
@@ -52,7 +53,11 @@ class AutonomousPhotographerUI(QWidget):
         super().__init__()
         self.setWindowTitle("Autonomous Photographer")
         
-        self.showFullScreen()
+        # Set a default window size (Width, Height)
+        self.resize(1024, 600) 
+        # Show as a standard window instead of full screen
+        self.show() 
+        
         self.setStyleSheet("background-color: #16181d;")
 
         # --- Main Horizontal Layout ---
@@ -60,9 +65,16 @@ class AutonomousPhotographerUI(QWidget):
         self.setLayout(main_layout)
 
         # --- Left Side: Video Feed ---
+        # --- Left Side: Video Feed ---
         self.video_label = QLabel(self)
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("background-color: black; border: 2px solid #1c2024;")
+        
+        # --- ADD THESE TWO LINES ---
+        self.video_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.video_label.setMinimumSize(320, 240) # Gives it a safe baseline so it doesn't collapse
+        # ---------------------------
+
         main_layout.addWidget(self.video_label, stretch=3)
 
         # --- Right Side: Control Panel ---
