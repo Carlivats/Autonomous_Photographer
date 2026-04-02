@@ -51,31 +51,51 @@ class AutonomousPhotographerUI(QWidget):
 
         control_layout.addStretch()
 
+        self.btn_settings = QPushButton("Settings", self)
+        self.btn_settings.setStyleSheet(button_style)
+        self.btn_settings.clicked.connect(self.open_settings)
+        control_layout.addWidget(self.btn_settings)
+
+        self.btn_gallery = QPushButton("Gallery", self)
+        self.btn_gallery.setStyleSheet(button_style)
+        self.btn_gallery.clicked.connect(self.open_gallery)
+        control_layout.addWidget(self.btn_gallery)
+
         self.btn_exit = QPushButton("Exit App", self)
-        self.btn_exit.setStyleSheet(button_style.replace("#1c2024", "#e74c3c"))
+        self.btn_exit.setStyleSheet(button_style.replace("#1c2024", "#e74c3c").replace("#525a70", "#c0392b"))
         self.btn_exit.clicked.connect(self.close_app)
         control_layout.addWidget(self.btn_exit)
 
         main_layout.addLayout(control_layout, stretch=1)
 
-        # Start Background Thread
+        # --- Initialize and Start the Camera Thread ---
         self.thread = CameraWorker(model_path)
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.start()
 
+    # --- UI Slots (Actions) ---
     def update_image(self, q_img):
-        self.video_label.setPixmap(QPixmap.fromImage(q_img).scaled(
-            self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        pixmap = QPixmap.fromImage(q_img)
+        scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.video_label.setPixmap(scaled_pixmap)
 
     def start_session(self):
-        self.thread.is_tracking = True
+        print("Starting autonomous session...")
+        self.thread.is_tracking = True # ENABLE TRACKING
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
 
     def stop_session(self):
-        self.thread.is_tracking = False
+        print("Stopping autonomous session...")
+        self.thread.is_tracking = False # DISABLE TRACKING
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
+
+    def open_settings(self):
+        print("Opening Settings...")
+
+    def open_gallery(self):
+        print("Opening Gallery...")
 
     def close_app(self):
         self.thread.stop()
