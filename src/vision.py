@@ -10,7 +10,7 @@ from picamera2.devices import Hailo
 import config
 from hardware import GimbalController
 from pose_utils import postproc_yolov8_pose
-from analyzer import get_subject_sharpness, get_region_exposure
+from analyzer import get_subject_sharpness, get_region_exposure, get_subject_contrast, get_region_contrast
 
 class CameraWorker(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -43,49 +43,47 @@ class CameraWorker(QThread):
             while self._run_flag:
                 try:
                     main_frame = self.picam2.capture_array("main")
+                    gray = cv2.cvtColor(main_frame, cv2.COLOR_BGR2GRAY)
+                    h, w = gray.shape
                     
                     if self.is_tracking:
-                        # 1. Evaluate Exposure Regions First
-                        gray = cv2.cvtColor(main_frame, cv2.COLOR_BGR2GRAY)
-                        h, w = gray.shape
-                        regions = {
-                            "top":    gray[0:h//3, :],
-                            "bottom": gray[2*h//3:h, :],
-                            "left":   gray[:, 0:w//3],
-                            "right":  gray[:, 2*w//3:w],
-                            "center": gray[h//3:2*h//3, w//3:2*w//3]
-                        }
                         
-                        exp_results = {name: get_region_exposure(roi) for name, roi in regions.items()}
-                        center_exp_val, center_status = exp_results['center']
+                        # --- ALWAYS ON: Whole Frame Exposure ---
+                        # Pass the entire gray frame to get the scene's total exposure
+                        frame_exp_val, frame_exp_status = get_region_exposure(gray)
                         
                         # --- PRIORITY 1: EXPOSURE RECOVERY ---
-                        if center_status != "Good":
-                            self.active_mode = f"EXPOSURE ({center_status.upper()})"
-                            err_x, err_y = 0.0, 0.0
+                        if frame_exp_status != "Good":
+                            self.active_mode = f"EXPOSURE RECOVERY"
                             
-                            # Create artificial error to drive the Gimbal
-                            # (You may need to flip the + / - signs depending on your servo orientation)
-                            if exp_results['right'][1] == "Good":
-                                err_x = 0.5  # Steer Right
-                            elif exp_results['left'][1] == "Good":
-                                err_x = -0.5 # Steer Left
-                                
-                            if exp_results['top'][1] == "Good":
-                                err_y = -0.5 # Steer Up
-                            elif exp_results['bottom'][1] == "Good":
-                                err_y = 0.5  # Steer Down
+                            # Slicing into regions is now only necessary to find the light source
+                            regions = {
+                                "top":    gray[0:h//3, :],
+                                "bottom": gray[2*h//3:h, :],
+                                "left":   gray[:, 0:w//3],
+                                "right":  gray[:, 2*w//3:w]
+                            }
+                            exp_results = {name: get_region_exposure(roi) for name, roi in regions.items()}
+                            
+                            err_x, err_y = 0.0, 0.0
+                            if exp_results['right'][1] == "Good": err_x = 0.5
+                            elif exp_results['left'][1] == "Good": err_x = -0.5
+                            if exp_results['top'][1] == "Good": err_y = -0.5
+                            elif exp_results['bottom'][1] == "Good": err_y = 0.5
                                 
                             self.gimbal.track_target(err_x, err_y)
                             
-                            # Emit stats to UI (No sharpness since we aren't running YOLO right now)
+                            # Calculate room contrast for the UI while recovering
+                            room_cont_val, room_cont_status = get_region_contrast(gray)
+                            
                             self.stats_signal.emit({
-                                "exposure": int(center_exp_val),
-                                "exposure_status": center_status,
-                                "sharpness": "N/A"
+                                "sharpness": "N/A",
+                                "exposure": int(frame_exp_val),
+                                "exposure_status": frame_exp_status,
+                                "contrast": int(room_cont_val),
+                                "contrast_status": room_cont_status
                             })
                             
-                            # Draw visual indicator for exposure mode
                             cv2.putText(main_frame, self.active_mode, (20, 40), 
                                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         
@@ -94,12 +92,16 @@ class CameraWorker(QThread):
                             lores_frame = self.picam2.capture_array("lores")
                             raw_detections = hailo.run(lores_frame)
                             predictions = postproc_yolov8_pose(1, raw_detections, model_size)
+                            
+                            person_detected = False
 
                             if predictions and len(predictions['scores']) > 0:
                                 best_idx = np.argmax(predictions['scores'].flatten())
                                 confidence = predictions['scores'].flatten()[best_idx]
 
                                 if confidence > 0.6:
+                                    person_detected = True
+                                    self.active_mode = "TRACKING (YOLO)"
                                     person_kps = predictions['keypoints'][0][best_idx].reshape(-1, 2)
                                     norm_x = person_kps[0][0] / model_w
                                     norm_y = person_kps[0][1] / model_h
@@ -114,15 +116,30 @@ class CameraWorker(QThread):
                                     box_x2 = int((bbox[2] / model_w) * config.WIDTH)
                                     box_y2 = int((bbox[3] / model_h) * config.HEIGHT)
                                     
-                                    # 3. Calculate Sharpness on the high-res main_frame
                                     sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
+                                    subj_cont_val, subj_cont_stat = get_subject_contrast(main_frame, box_x1, box_y1, box_x2, box_y2)
                                     
-                                    # 4. Emit the stats back to the main GUI thread
                                     self.stats_signal.emit({
                                         "sharpness": int(sharpness),
-                                        "exposure": int(center_exp_val),
-                                        "exposure_status": center_status
+                                        "exposure": int(frame_exp_val),
+                                        "exposure_status": frame_exp_status,
+                                        "contrast": int(subj_cont_val),
+                                        "contrast_status": subj_cont_stat
                                     })
+                            
+                                    # --- PRIORITY 3: IDLE / MONITORING ---
+                                    if not person_detected:
+                                        self.active_mode = "IDLE (NO SUBJECT)"
+                                        
+                                        room_cont_val, room_cont_status = get_region_contrast(gray)
+                                        
+                                        self.stats_signal.emit({
+                                            "sharpness": "N/A",
+                                            "exposure": int(frame_exp_val),       # <-- Whole Frame Exposure!
+                                            "exposure_status": frame_exp_status,
+                                            "contrast": int(room_cont_val),       # <-- Room Contrast
+                                            "contrast_status": room_cont_status
+                                        })
                                     
                                     # (Optional) You can now remove the cv2.putText line here if 
                                     # you no longer want it drawn directly on the video feed.
