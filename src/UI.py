@@ -1,9 +1,10 @@
 # main.py
+import os
 import sys
 import argparse
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QSizePolicy
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPixmap, QIcon
 
 # Import our custom worker thread
 from vision import CameraWorker
@@ -15,6 +16,8 @@ class AutonomousPhotographerUI(QWidget):
         self.resize(1024, 600)
         self.show()
         self.setStyleSheet("background-color: #16181d;")
+
+        icon_path = os.path.join(os.path.dirname(__file__), 'assets', 'gear.png')
 
         main_layout = QHBoxLayout()
         self.setLayout(main_layout)
@@ -29,6 +32,7 @@ class AutonomousPhotographerUI(QWidget):
 
         # Control Panel
         control_layout = QVBoxLayout()
+        
         button_style = """
             QPushButton {
                 background-color: #1c2024; color: white;
@@ -37,9 +41,38 @@ class AutonomousPhotographerUI(QWidget):
             }
             QPushButton:pressed { background-color: #525a70; }
         """
+
+        control_layout.addSpacing(20) 
+        
+        self.btn_settings = QPushButton("", self)
+        self.btn_settings.setFixedSize(80, 80)
+        
+        self.btn_settings.setIcon(QIcon(icon_path))
+        
+        # Scale the image inside the button (40x40 leaves nice padding inside the 80x80 button)
+        self.btn_settings.setIconSize(QSize(75, 75)) 
+        
+        self.btn_settings.setStyleSheet("""
+            QPushButton {
+                background-color: #1c2024; 
+                border-radius: 40px; 
+                border: 2px solid #525a70;
+            }
+            QPushButton:hover { border: 2px solid white; background-color: #2b3038; }
+            QPushButton:pressed { background-color: #525a70; }
+        """)
+        self.btn_settings.clicked.connect(self.open_settings)
+
+        # Center it horizontally
+        settings_layout = QHBoxLayout()
+        settings_layout.addStretch()
+        settings_layout.addWidget(self.btn_settings)
+        settings_layout.addStretch()
+        
+        control_layout.addLayout(settings_layout)
+
         self.stats_label = QLabel(self.video_label)
 
-        control_layout = QVBoxLayout()
         control_layout.addStretch()
         
         # 1. Define the dynamic styles for the button
@@ -63,7 +96,7 @@ class AutonomousPhotographerUI(QWidget):
 
         # 2. Create the toggle button
         self.btn_toggle = QPushButton("", self)
-        self.btn_toggle.setFixedSize(80, 80) # Force a perfect square
+        self.btn_toggle.setFixedSize(80, 80)
         self.btn_toggle.setStyleSheet(self.btn_idle_style)
         self.btn_toggle.clicked.connect(self.toggle_session)
 
@@ -97,11 +130,6 @@ class AutonomousPhotographerUI(QWidget):
         
         # 3. Ensure it sizes itself correctly right on startup
         self.stats_label.adjustSize()
-
-        self.btn_settings = QPushButton("Settings", self)
-        self.btn_settings.setStyleSheet(button_style)
-        self.btn_settings.clicked.connect(self.open_settings)
-        control_layout.addWidget(self.btn_settings)
 
         self.btn_gallery = QPushButton("Gallery", self)
         self.btn_gallery.setStyleSheet(button_style)
