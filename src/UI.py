@@ -48,7 +48,7 @@ class AutonomousPhotographerUI(QWidget):
         """)
 
         # Initialize with placeholder text
-        self.stats_label.setText("Sharpness : N/A\nContrast  : N/A\nExposure  : N/A\nBlur      : N/A")
+        self.stats_label.setText("Sharpness :\nContrast  :\nExposure  :\nBlur      :")
         
         # Insert the stats label right above the stretch/bottom buttons
         control_layout.addWidget(self.stats_label)
@@ -99,10 +99,10 @@ class AutonomousPhotographerUI(QWidget):
 
     def update_stats_panel(self, stats):
         """Updates the text label whenever the vision thread emits new data."""
-        sharpness = stats.get("sharpness", "N/A")
-        contrast = stats.get("contrast", "N/A")
-        exposure = stats.get("exposure", "N/A")
-        blur = stats.get("blur", "N/A")
+        sharpness = stats.get("sharpness", "")
+        contrast = stats.get("contrast", "")
+        exposure = stats.get("exposure", "")
+        blur = stats.get("blur", "")
 
         # Format the text. As you add more stats to the dictionary in vision.py, 
         # you can pull them out here using stats.get("contrast", "N/A"), etc.
