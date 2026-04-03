@@ -104,12 +104,14 @@ class AutonomousPhotographerUI(QWidget):
         exposure_status = stats.get("exposure_status", "N/A")
         contrast = stats.get("contrast", "N/A")
         contrast_status = stats.get("contrast_status", "N/A")
+        blur = stats.get("blur", "N/A")
+        blur_status = stats.get("blur_status", "N/A")
         
         display_text = (
             f"Sharpness : {sharpness}\n"
             f"Exposure  : {exposure} ({exposure_status})\n"
             f"Contrast  : {contrast} ({contrast_status})\n"
-            f"Blur      : N/A"
+            f"Blur      : {blur} ({blur_status})"
         )
         self.stats_label.setText(display_text)
 

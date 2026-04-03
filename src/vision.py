@@ -10,7 +10,7 @@ from picamera2.devices import Hailo
 import config
 from hardware import GimbalController
 from pose_utils import postproc_yolov8_pose
-from analyzer import get_subject_sharpness, get_region_exposure, get_subject_contrast, get_region_contrast
+from analyzer import get_subject_sharpness, get_region_exposure, get_subject_contrast, get_region_contrast, get_frame_blur
 
 class CameraWorker(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -27,6 +27,11 @@ class CameraWorker(QThread):
         # Initialize our custom hardware controller
         self.gimbal = GimbalController()
         self.active_mode = "CENTER"
+        
+        # --- Motion/Blur Stability Tracking ---
+        self.stability_counter = 0
+        self.STABILITY_REQUIRED = 2
+        self.SHARP_THRESHOLD = 100.0
 
     def run(self):
         with Hailo(self.model_path) as hailo:
@@ -48,9 +53,9 @@ class CameraWorker(QThread):
                     
                     if self.is_tracking:
                         
-                        # --- ALWAYS ON: Whole Frame Exposure ---
-                        # Pass the entire gray frame to get the scene's total exposure
+                        # --- ALWAYS ON: Whole Frame Exposure & Motion Blur ---
                         frame_exp_val, frame_exp_status = get_region_exposure(gray)
+                        frame_blur_val, frame_blur_status = get_frame_blur(gray)
                         
                         # --- PRIORITY 1: EXPOSURE RECOVERY ---
                         if frame_exp_status != "Good":
@@ -81,7 +86,9 @@ class CameraWorker(QThread):
                                 "exposure": int(frame_exp_val),
                                 "exposure_status": frame_exp_status,
                                 "contrast": int(room_cont_val),
-                                "contrast_status": room_cont_status
+                                "contrast_status": room_cont_status,
+                                "blur": int(frame_blur_val),
+                                "blur_status": frame_blur_status
                             })
                             
                             cv2.putText(main_frame, self.active_mode, (20, 40), 
@@ -106,7 +113,7 @@ class CameraWorker(QThread):
                                     norm_x = person_kps[0][0] / model_w
                                     norm_y = person_kps[0][1] / model_h
                                     
-                                    # --- NEW: Image Analysis Logic ---
+                                    # --- Image Analysis Logic ---
                                     # 1. Extract Bounding Box for the best detection (Model Space)
                                     bbox = predictions['bboxes'][0][best_idx]
                                     
@@ -124,7 +131,9 @@ class CameraWorker(QThread):
                                         "exposure": int(frame_exp_val),
                                         "exposure_status": frame_exp_status,
                                         "contrast": int(subj_cont_val),
-                                        "contrast_status": subj_cont_stat
+                                        "contrast_status": subj_cont_stat,
+                                        "blur": int(frame_blur_val),
+                                        "blur_status": frame_blur_status
                                     })
                             
                                     # --- PRIORITY 3: IDLE / MONITORING ---
@@ -135,10 +144,12 @@ class CameraWorker(QThread):
                                         
                                         self.stats_signal.emit({
                                             "sharpness": "N/A",
-                                            "exposure": int(frame_exp_val),       # <-- Whole Frame Exposure!
+                                            "exposure": int(frame_exp_val),
                                             "exposure_status": frame_exp_status,
-                                            "contrast": int(room_cont_val),       # <-- Room Contrast
-                                            "contrast_status": room_cont_status
+                                            "contrast": int(room_cont_val),
+                                            "contrast_status": room_cont_status,
+                                            "blur": int(frame_blur_val),
+                                            "blur_status": frame_blur_status
                                         })
                                     
                                     # (Optional) You can now remove the cv2.putText line here if 

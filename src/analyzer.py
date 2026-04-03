@@ -85,3 +85,19 @@ def get_region_contrast(roi):
     else: status = "High"
     
     return contrast_val, status
+
+def get_frame_blur(gray_image):
+    """
+    Calculates the motion blur over the entire frame.
+    Expects a grayscale image.
+    Lower value = More Blur. Higher value = Crisper.
+    """
+    # Calculate Laplacian variance directly on the provided grayscale image
+    blur_score = cv2.Laplacian(gray_image, cv2.CV_64F).var()
+
+    if blur_score < 60:
+        status = "Blurry"
+    else:
+        status = "Clear"
+
+    return blur_score, status
