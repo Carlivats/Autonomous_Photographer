@@ -37,7 +37,46 @@ class AutonomousPhotographerUI(QWidget):
             }
             QPushButton:pressed { background-color: #525a70; }
         """
-        self.stats_label = QLabel(self.video_label) 
+        self.stats_label = QLabel(self.video_label)
+
+        control_layout = QVBoxLayout()
+        control_layout.addStretch()
+        
+        # 1. Define the dynamic styles for the button
+        self.btn_idle_style = """
+            QPushButton {
+                background-color: white; 
+                border-radius: 40px;  /* Exactly half the width/height to make a circle */
+                border: 4px solid #525a70;
+            }
+            QPushButton:pressed { background-color: #d0d0d0; }
+        """
+        
+        self.btn_active_style = """
+            QPushButton {
+                background-color: #e74c3c; /* Red */
+                border-radius: 40px;
+                border: 4px solid white;
+            }
+            QPushButton:pressed { background-color: #c0392b; }
+        """
+
+        # 2. Create the toggle button
+        self.btn_toggle = QPushButton("", self)
+        self.btn_toggle.setFixedSize(80, 80) # Force a perfect square
+        self.btn_toggle.setStyleSheet(self.btn_idle_style)
+        self.btn_toggle.clicked.connect(self.toggle_session)
+
+        # 3. Center the button horizontally using an internal layout
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_toggle)
+        btn_layout.addStretch()
+
+        # Add the centered button to the main control panel
+        control_layout.addLayout(btn_layout)
+        
+        control_layout.addStretch()
         
         # Use RGBA for the background color to set the alpha channel (transparency)
         # 166 out of 255 is roughly 65% opacity (35% transparent)
@@ -58,19 +97,6 @@ class AutonomousPhotographerUI(QWidget):
         
         # 3. Ensure it sizes itself correctly right on startup
         self.stats_label.adjustSize()
-
-        self.btn_start = QPushButton("Start Session", self)
-        self.btn_start.setStyleSheet(button_style.replace("#1c2024", "#fed766").replace("white", "black"))
-        self.btn_start.clicked.connect(self.start_session)
-        control_layout.addWidget(self.btn_start)
-
-        self.btn_stop = QPushButton("Stop Session", self)
-        self.btn_stop.setStyleSheet(button_style)
-        self.btn_stop.clicked.connect(self.stop_session)
-        self.btn_stop.setEnabled(False)
-        control_layout.addWidget(self.btn_stop)
-
-        control_layout.addStretch()
 
         self.btn_settings = QPushButton("Settings", self)
         self.btn_settings.setStyleSheet(button_style)
@@ -102,6 +128,19 @@ class AutonomousPhotographerUI(QWidget):
         scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled_pixmap)
 
+    def toggle_session(self):
+        """Toggles the autonomous tracking state and updates the button color."""
+        if not self.thread.is_tracking:
+            # Turn ON
+            print("Starting autonomous session...")
+            self.thread.is_tracking = True
+            self.btn_toggle.setStyleSheet(self.btn_active_style)
+        else:
+            # Turn OFF
+            print("Stopping autonomous session...")
+            self.thread.is_tracking = False
+            self.btn_toggle.setStyleSheet(self.btn_idle_style)
+
     def update_stats_panel(self, stats):
         """Updates the text label whenever the vision thread emits new data."""
         sharpness = stats.get("sharpness", "N/A")
@@ -122,18 +161,6 @@ class AutonomousPhotographerUI(QWidget):
         
         # Add this line to force the transparent box to snap to the new text size
         self.stats_label.adjustSize()
-
-    def start_session(self):
-        print("Starting autonomous session...")
-        self.thread.is_tracking = True # ENABLE TRACKING
-        self.btn_start.setEnabled(False)
-        self.btn_stop.setEnabled(True)
-
-    def stop_session(self):
-        print("Stopping autonomous session...")
-        self.thread.is_tracking = False # DISABLE TRACKING
-        self.btn_start.setEnabled(True)
-        self.btn_stop.setEnabled(False)
 
     def open_settings(self):
         print("Opening Settings...")
