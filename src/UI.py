@@ -37,22 +37,27 @@ class AutonomousPhotographerUI(QWidget):
             }
             QPushButton:pressed { background-color: #525a70; }
         """
-        self.stats_label = QLabel(self)
+        self.stats_label = QLabel(self.video_label) 
+        
+        # Use RGBA for the background color to set the alpha channel (transparency)
+        # 166 out of 255 is roughly 65% opacity (35% transparent)
         self.stats_label.setStyleSheet("""
-            background-color: #1c2024; 
+            background-color: rgba(28, 32, 36, 166); 
             color: #a0aabf; 
             font-size: 16px; 
             font-family: monospace;
-            padding: 15px; 
-            border-radius: 8px;
+            padding: 15px;
+            border-radius: 0px;
         """)
 
         # Initialize with placeholder text
-        self.stats_label.setText("Sharpness :\nContrast  :\nExposure  :\nBlur      :")
+        self.stats_label.setText("Sharpness : N/A\nExposure  : N/A\nContrast  : N/A\nScene Blur: N/A")
         
-        # Insert the stats label right above the stretch/bottom buttons
-        control_layout.addWidget(self.stats_label)
-        control_layout.addStretch()
+        # 2. Position it in the top-left corner with a 15px margin
+        self.stats_label.move(15, 15)
+        
+        # 3. Ensure it sizes itself correctly right on startup
+        self.stats_label.adjustSize()
 
         self.btn_start = QPushButton("Start Session", self)
         self.btn_start.setStyleSheet(button_style.replace("#1c2024", "#fed766").replace("white", "black"))
@@ -111,9 +116,12 @@ class AutonomousPhotographerUI(QWidget):
             f"Sharpness : {sharpness}\n"
             f"Exposure  : {exposure} ({exposure_status})\n"
             f"Contrast  : {contrast} ({contrast_status})\n"
-            f"Blur      : {blur} ({blur_status})"
+            f"Scene Blur: {blur} ({blur_status})"
         )
         self.stats_label.setText(display_text)
+        
+        # Add this line to force the transparent box to snap to the new text size
+        self.stats_label.adjustSize()
 
     def start_session(self):
         print("Starting autonomous session...")
