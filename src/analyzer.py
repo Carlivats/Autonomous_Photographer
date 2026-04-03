@@ -29,5 +29,19 @@ def get_subject_sharpness(image, x1, y1, x2, y2):
 def get_subject_contrast(image, x1, y1, x2, y2):
     pass
 
-def get_subject_exposure(image, x1, y1, x2, y2):
-    pass
+def get_region_exposure(roi):
+    """
+    Analyzes the brightness levels of a raw image array (Region of Interest).
+    Returns the average brightness and an exposure status.
+    """
+    mean_brightness, _ = cv2.meanStdDev(roi)
+    exposure = mean_brightness[0][0]
+
+    if exposure < 50:
+        status = "Underexposed"
+    elif exposure > 160:
+        status = "Overexposed"
+    else:
+        status = "Good"
+
+    return exposure, status
