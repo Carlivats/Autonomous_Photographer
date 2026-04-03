@@ -10,6 +10,7 @@ from picamera2.devices import Hailo
 import config
 from hardware import GimbalController
 from pose_utils import postproc_yolov8_pose 
+from analyzer import get_subject_sharpness
 
 class CameraWorker(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -44,6 +45,7 @@ class CameraWorker(QThread):
                     if self.is_tracking:
                         lores_frame = self.picam2.capture_array("lores")
                         raw_detections = hailo.run(lores_frame)
+                        # Note: predictions['bboxes'] contains boxes in [x1, y1, x2, y2]
                         predictions = postproc_yolov8_pose(1, raw_detections, model_size)
 
                         if predictions and len(predictions['scores']) > 0:
@@ -51,9 +53,29 @@ class CameraWorker(QThread):
                             confidence = predictions['scores'].flatten()[best_idx]
 
                             if confidence > 0.6:
-                                person_kps = predictions['keypoints'][best_idx].reshape(-1, 2)
+                                person_kps = predictions['keypoints'][0][best_idx].reshape(-1, 2)
                                 norm_x = person_kps[0][0] / model_w
                                 norm_y = person_kps[0][1] / model_h
+                                
+                                # --- NEW: Image Analysis Logic ---
+                                # 1. Extract Bounding Box for the best detection (Model Space)
+                                bbox = predictions['bboxes'][0][best_idx]
+                                
+                                # 2. Scale Box to Main Frame Space (1024x768)
+                                box_x1 = int((bbox[0] / model_w) * config.WIDTH)
+                                box_y1 = int((bbox[1] / model_h) * config.HEIGHT)
+                                box_x2 = int((bbox[2] / model_w) * config.WIDTH)
+                                box_y2 = int((bbox[3] / model_h) * config.HEIGHT)
+                                
+                                # 3. Calculate Sharpness on the high-res main_frame
+                                sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
+                                
+                                # 4. Draw the bounding box and sharpness score
+                                box_color = (0, 255, 0) if sharpness > 100 else (0, 0, 255)
+                                cv2.rectangle(main_frame, (box_x1, box_y1), (box_x2, box_y2), box_color, 2)
+                                cv2.putText(main_frame, f"Sharp: {int(sharpness)}", (box_x1, max(20, box_y1 - 10)), 
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
+                                # ---------------------------------
                                 
                                 # Composition Logic
                                 dist_to_center = np.sqrt((norm_x - config.CENTER_TARGET[0])**2 + (norm_y - config.CENTER_TARGET[1])**2)
@@ -83,12 +105,13 @@ class CameraWorker(QThread):
                                         cv2.line(main_frame, (int(config.WIDTH * px), 0), (int(config.WIDTH * px), config.HEIGHT), (100, 100, 100), 1)
                                         cv2.line(main_frame, (0, int(config.HEIGHT * px)), (config.WIDTH, int(config.HEIGHT * px)), (100, 100, 100), 1)
 
+                                # 1. Draw Tracking Node
                                 px_x, px_y = int(norm_x * config.WIDTH), int(norm_y * config.HEIGHT)
-                                color = (0, 255, 0) if (abs(err_x) < config.DEADZONE and abs(err_y) < config.DEADZONE) else (0, 200, 255)
+                                node_color = (0, 255, 0) if (abs(err_x) < config.DEADZONE and abs(err_y) < config.DEADZONE) else (0, 200, 255)
                                 cv2.circle(main_frame, (int(target_x * config.WIDTH), int(target_y * config.HEIGHT)), 15, (255, 255, 0), 2)
-                                cv2.circle(main_frame, (px_x, px_y), 8, color, -1)
-                                cv2.putText(main_frame, self.active_mode, (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-
+                                cv2.circle(main_frame, (px_x, px_y), 8, node_color, -1)
+                                cv2.putText(main_frame, self.active_mode, (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, node_color, 1)
+                                         
                     # UI Update
                     h, w, ch = main_frame.shape
                     q_img = QImage(main_frame.data, w, h, ch * w, QImage.Format_RGB888)

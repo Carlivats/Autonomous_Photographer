@@ -19,3 +19,6 @@ INTERSECTIONS = [
     (0.33, 0.33), (0.66, 0.33),
     (0.33, 0.66), (0.66, 0.66)
 ]
+
+# Analysis Thresholds
+SHARPNESS_THRESHOLD = 200
