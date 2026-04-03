@@ -37,6 +37,22 @@ class AutonomousPhotographerUI(QWidget):
             }
             QPushButton:pressed { background-color: #525a70; }
         """
+        self.stats_label = QLabel(self)
+        self.stats_label.setStyleSheet("""
+            background-color: #1c2024; 
+            color: #a0aabf; 
+            font-size: 16px; 
+            font-family: monospace;
+            padding: 15px; 
+            border-radius: 8px;
+        """)
+
+        # Initialize with placeholder text
+        self.stats_label.setText("Sharpness : N/A\nContrast  : N/A\nExposure  : N/A\nBlur      : N/A")
+        
+        # Insert the stats label right above the stretch/bottom buttons
+        control_layout.addWidget(self.stats_label)
+        control_layout.addStretch()
 
         self.btn_start = QPushButton("Start Session", self)
         self.btn_start.setStyleSheet(button_style.replace("#1c2024", "#fed766").replace("white", "black"))
@@ -71,6 +87,8 @@ class AutonomousPhotographerUI(QWidget):
         # --- Initialize and Start the Camera Thread ---
         self.thread = CameraWorker(model_path)
         self.thread.change_pixmap_signal.connect(self.update_image)
+        self.thread.stats_signal.connect(self.update_stats_panel)
+        
         self.thread.start()
 
     # --- UI Slots (Actions) ---
@@ -78,6 +96,23 @@ class AutonomousPhotographerUI(QWidget):
         pixmap = QPixmap.fromImage(q_img)
         scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled_pixmap)
+
+    def update_stats_panel(self, stats):
+        """Updates the text label whenever the vision thread emits new data."""
+        sharpness = stats.get("sharpness", "N/A")
+        contrast = stats.get("contrast", "N/A")
+        exposure = stats.get("exposure", "N/A")
+        blur = stats.get("blur", "N/A")
+
+        # Format the text. As you add more stats to the dictionary in vision.py, 
+        # you can pull them out here using stats.get("contrast", "N/A"), etc.
+        display_text = (
+            f"Sharpness : {sharpness}\n"
+            f"Contrast  : {contrast}\n"
+            f"Exposure  : {exposure}\n"
+            f"Blur      : {blur}"
+        )
+        self.stats_label.setText(display_text)
 
     def start_session(self):
         print("Starting autonomous session...")
