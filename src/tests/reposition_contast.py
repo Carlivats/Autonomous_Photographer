@@ -8,7 +8,7 @@ import numpy as np
 from picamera2 import Picamera2
 from picamera2.devices.imx500 import IMX500
 from adafruit_servokit import ServoKit
-from src.get_contrast_score import get_contrast_score
+from src.algorithms.get_contrast_score import get_contrast_score
 
 model_path = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
 model = IMX500(model_path)

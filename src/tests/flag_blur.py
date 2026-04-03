@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from picamera2 import Picamera2, MappedArray
 from picamera2.devices.imx500 import IMX500
-from src.get_sharpness_score import get_subject_sharpness
+from src.algorithms.get_sharpness_score import get_subject_sharpness
 
 # Thresholds
 SHARP_THRESHOLD = 100.0
