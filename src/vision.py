@@ -48,7 +48,7 @@ class CameraWorker(QThread):
             while self._run_flag:
                 try:
                     main_frame = self.picam2.capture_array("main")
-                    gray = cv2.cvtColor(main_frame, cv2.COLOR_BGR2GRAY)
+                    gray = cv2.cvtColor(main_frame, cv2.COLOR_RGB2GRAY)
                     h, w = gray.shape
                     
                     if self.is_tracking:
@@ -194,7 +194,8 @@ class CameraWorker(QThread):
 
                     # UI Update
                     h, w, ch = main_frame.shape
-                    q_img = QImage(main_frame.data, w, h, ch * w, QImage.Format_RGB888)
+                    rgb_corrected = cv2.cvtColor(main_frame, cv2.COLOR_BGR2RGB) 
+                    q_img = QImage(rgb_corrected.data, w, h, ch * w, QImage.Format_RGB888)
                     self.change_pixmap_signal.emit(q_img)
                     time.sleep(0.01) 
                     
