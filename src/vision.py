@@ -51,13 +51,14 @@ class CameraWorker(QThread):
                     gray = cv2.cvtColor(main_frame, cv2.COLOR_RGB2GRAY)
                     h, w = gray.shape
                     
+                    # 1. Initialize these at the top of the loop
+                    person_detected = False
+                    current_bbox = None
+                    
+                    # 2. Hardware and YOLO Logic
                     if self.is_tracking:
-                        
-                        # --- ALWAYS ON: Whole Frame Exposure & Motion Blur ---
+                        # ALWAYS ON: Check global exposure
                         frame_exp_val, frame_exp_status = get_region_exposure(gray)
-                        
-                        person_detected = False
-                        current_bbox = None
                         
                         # --- PRIORITY 1: EXPOSURE RECOVERY ---
                         if frame_exp_status != "Good":
@@ -147,19 +148,19 @@ class CameraWorker(QThread):
                             # --- PRIORITY 3: IDLE ---
                             if not person_detected:
                                 self.active_mode = "IDLE (NO SUBJECT)"
-        
-                        # --- FINALLY: GENERATE AND EMIT METRICS ---
-                        frame_metrics = generate_frame_metrics(
-                            main_frame, gray, self.is_tracking, person_detected, current_bbox
-                        )
-                        self.stats_signal.emit(frame_metrics)
 
-                    # UI Update
+                    # 3. --- GENERATE AND EMIT METRICS ---
+                    frame_metrics = generate_frame_metrics(
+                        main_frame, gray, self.is_tracking, person_detected, current_bbox
+                    )
+                    self.stats_signal.emit(frame_metrics)
+
+                    # 4. UI Update
                     h, w, ch = main_frame.shape
                     rgb_corrected = cv2.cvtColor(main_frame, cv2.COLOR_BGR2RGB) 
                     q_img = QImage(rgb_corrected.data, w, h, ch * w, QImage.Format_RGB888)
                     self.change_pixmap_signal.emit(q_img)
-                    time.sleep(0.01) 
+                    time.sleep(0.01)
                     
                 except Exception as e:
                     print(f"Frame capture error: {e}")

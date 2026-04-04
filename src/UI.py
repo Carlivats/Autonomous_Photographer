@@ -5,9 +5,8 @@ import argparse
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QSizePolicy
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon
-
-# Import our custom worker thread
 from vision import CameraWorker
+from session_manager import CaptureSessionManager
 
 class AutonomousPhotographerUI(QWidget):
     def __init__(self, model_path):
@@ -143,6 +142,10 @@ class AutonomousPhotographerUI(QWidget):
 
         main_layout.addLayout(control_layout, stretch=1)
 
+        # --- Initialize Session Manager ---
+        self.session_manager = CaptureSessionManager()
+        self.session_manager.session_finished_signal.connect(self.end_session_ui)
+
         # --- Initialize and Start the Camera Thread ---
         self.thread = CameraWorker(model_path)
         self.thread.change_pixmap_signal.connect(self.update_image)
@@ -152,6 +155,9 @@ class AutonomousPhotographerUI(QWidget):
 
     # --- UI Slots (Actions) ---
     def update_image(self, q_img):
+        # Save the current frame to memory so the session manager can grab it
+        self.current_frame = q_img 
+        
         pixmap = QPixmap.fromImage(q_img)
         scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled_pixmap)
@@ -163,11 +169,18 @@ class AutonomousPhotographerUI(QWidget):
             print("Starting autonomous session...")
             self.thread.is_tracking = True
             self.btn_toggle.setStyleSheet(self.btn_active_style)
+            
+            self.session_manager.start_session(target_photos=3)
         else:
-            # Turn OFF
-            print("Stopping autonomous session...")
-            self.thread.is_tracking = False
-            self.btn_toggle.setStyleSheet(self.btn_idle_style)
+            # Turn OFF Manually
+            self.end_session_ui()
+
+    def end_session_ui(self):
+        """Resets the UI when a session ends automatically or manually."""
+        print("Stopping autonomous session...")
+        self.thread.is_tracking = False
+        self.session_manager.stop_session()
+        self.btn_toggle.setStyleSheet(self.btn_idle_style)
 
     def update_stats_panel(self, stats):
         """Updates the text label whenever the vision thread emits new data."""
@@ -189,6 +202,9 @@ class AutonomousPhotographerUI(QWidget):
         
         # Add this line to force the transparent box to snap to the new text size
         self.stats_label.adjustSize()
+        
+        if self.thread.is_tracking and hasattr(self, 'current_frame'):
+            self.session_manager.process_frame(stats, self.current_frame)
 
     def open_settings(self):
         print("Opening Settings...")
