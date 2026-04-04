@@ -1,7 +1,57 @@
 # analyzer.py
+import time
 import cv2
 
-from algorithms.get_exposure_score import get_exposure_score
+def generate_frame_metrics(self, main_frame, gray_frame, is_tracking, person_detected=False, bbox=None):
+        """
+        Aggregates all image quality metrics into a single dictionary.
+        This fulfills the metadata requirement for Benchmark 7.
+        """
+        # Always-on metrics
+        frame_exp_val, frame_exp_status = get_region_exposure(gray_frame)
+        frame_blur_val, frame_blur_status = get_frame_blur(gray_frame)
+        
+        # Default empty/N/A values for subject-specific metrics
+        sharpness = "N/A"
+        contrast_val = "N/A"
+        contrast_status = "N/A"
+        composition_score = 0.0 # Placeholder for future composition rating engine
+        subject_info = None
+
+        if is_tracking and person_detected and bbox is not None:
+            # Unpack bounding box
+            box_x1, box_y1, box_x2, box_y2 = bbox
+            
+            # Calculate subject-specific metrics
+            sharpness = int(get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2))
+            contrast_val, contrast_status = get_subject_contrast(main_frame, box_x1, box_y1, box_x2, box_y2)
+            
+            # Format subject info for JSON storage
+            subject_info = {
+                "type": "person",
+                "bbox": [box_x1, box_y1, box_x2, box_y2]
+            }
+        else:
+            # If no subject, calculate room contrast
+            room_cont_val, room_cont_status = get_region_contrast(gray_frame)
+            contrast_val = int(room_cont_val)
+            contrast_status = room_cont_status
+
+        # Assemble the final dictionary matching Benchmark 7 requirements
+        metrics = {
+            "timestamp": time.time(),
+            "sharpness": sharpness,
+            "exposure": int(frame_exp_val),
+            "exposure_status": frame_exp_status,
+            "contrast": contrast_val,
+            "contrast_status": contrast_status,
+            "blur": int(frame_blur_val),
+            "blur_status": frame_blur_status,
+            "composition_score": composition_score,
+            "subject_info": subject_info
+        }
+        
+        return metrics
 
 def get_subject_sharpness(image, x1, y1, x2, y2):
     """
