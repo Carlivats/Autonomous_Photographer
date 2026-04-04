@@ -10,7 +10,7 @@ FRAME_CY = HEIGHT // 2
 GAIN_PAN = 0.5
 GAIN_TILT = 0.15
 DEADZONE = 0.03
-THIRDS_BIAS = 0.6
+THIRDS_BIAS = 0.1
 STICKINESS = 0.8
 
 # Composition Targets
@@ -19,6 +19,10 @@ INTERSECTIONS = [
     (0.33, 0.33), (0.66, 0.33),
     (0.33, 0.66), (0.66, 0.66)
 ]
+
+# Servo Channels
+PAN_CHANNEL = 1
+TILT_CHANNEL = 0
 
 # Analysis Thresholds
 SHARPNESS_THRESHOLD = 200
