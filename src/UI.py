@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon
 
 # Import our custom worker thread
+from gallery import GalleryUI
 from vision import CameraWorker
 
 class AutonomousPhotographerUI(QWidget):
@@ -195,6 +196,11 @@ class AutonomousPhotographerUI(QWidget):
 
     def open_gallery(self):
         print("Opening Gallery...")
+        # Create an instance of the Gallery UI
+        self.gallery_window = GalleryUI()
+        
+        # Show the gallery window
+        self.gallery_window.show()
 
     def close_app(self):
         self.thread.stop()
