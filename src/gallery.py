@@ -83,10 +83,23 @@ class GalleryUI(QWidget):
         sidebar_layout.setContentsMargins(30, 40, 30, 40)
         sidebar_layout.setSpacing(15)
 
-        title_label = QLabel("Autonomous\nPhotographer Logo")
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
-        sidebar_layout.addWidget(title_label)
+        
+        self.logo_label = QLabel()
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        
+        logo_path = os.path.join(self.base_dir, 'assets', 'logo.png') 
+        
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            # Scale it to a reasonable width (e.g., 200px) so it doesn't blow up the sidebar
+            scaled_pixmap = pixmap.scaledToWidth(200, Qt.SmoothTransformation)
+            self.logo_label.setPixmap(scaled_pixmap)
+        else:
+            # Fallback just in case the file name is wrong
+            self.logo_label.setText("LOGO MISSING") 
+            self.logo_label.setStyleSheet("color: red; font-weight: bold;")
+            
+        sidebar_layout.addWidget(self.logo_label)
         sidebar_layout.addWidget(self.create_separator_line())
 
         self.btn_home = self.create_sidebar_button("Home", 'home.png')
