@@ -421,3 +421,5 @@ requirements_backup.txt
 *.log
 __pycache__/
 *.pyc
+
+src/gallery/

@@ -1,45 +1,37 @@
 import os
 from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QVBoxLayout, 
                              QHBoxLayout, QGridLayout, QScrollArea, QFrame, QSizePolicy)
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, QSize, QRect, QFileSystemWatcher
+from PyQt5.QtGui import QIcon, QPixmap
 
-class AspectRatioLabel(QLabel):
-    """A custom label that strictly maintains either a 16:9 or 9:16 aspect ratio."""
-    def __init__(self, is_landscape=True, has_content=False):
+class ImageThumbLabel(QLabel):
+    """A custom label that loads an image, scales it, and center-crops it to fit a fixed box."""
+    def __init__(self, image_path, w, h):
         super().__init__()
-        self.is_landscape = is_landscape
+        self.image_path = image_path
         
-        # Sizing policy that tells Qt this widget relies on height-for-width calculations
-        policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
-        policy.setHeightForWidth(True)
-        self.setSizePolicy(policy)
-        
-        # Prevent the boxes from collapsing too small
-        self.setMinimumWidth(120)
-        
-        if has_content:
-            self.setStyleSheet("background-color: #4a505c; border-radius: 4px;") 
-        else:
-            self.setStyleSheet("background-color: #2c3038; border-radius: 4px;")
+        # Lock the size exactly so the layout manager cannot squish it
+        self.setFixedSize(w, h)
+        self.setStyleSheet("background-color: #2c3038; border-radius: 4px;")
+        self.setAlignment(Qt.AlignCenter)
 
-    def hasHeightForWidth(self):
-        return True
-
-    def heightForWidth(self, width):
-        # Calculate strict 16:9 or 9:16 ratios
-        if self.is_landscape:
-            return int(width * (9.0 / 16.0))
-        else:
-            return int(width * (16.0 / 9.0))
-            
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        # Force the height constraint on resize so the grid doesn't squash them
-        w = self.width()
-        h = self.heightForWidth(w)
-        self.setMinimumHeight(h)
-        self.setMaximumHeight(h)
+        # Load and crop the image
+        original_pixmap = QPixmap(self.image_path)
+        if not original_pixmap.isNull():
+            target_size = QSize(w, h)
+            # Scale up to cover the box completely
+            scaled = original_pixmap.scaled(
+                target_size, 
+                Qt.KeepAspectRatioByExpanding, 
+                Qt.SmoothTransformation
+            )
+            # Crop off the excess from the center
+            crop_rect = QRect(
+                (scaled.width() - w) // 2,
+                (scaled.height() - h) // 2,
+                w, h
+            )
+            self.setPixmap(scaled.copy(crop_rect))
 
 class GalleryUI(QWidget):
     def __init__(self, parent=None):
@@ -48,9 +40,20 @@ class GalleryUI(QWidget):
         self.resize(1024, 600)
         self.setStyleSheet("background-color: #16181d; color: white;")
 
-        # Base directory for loading icons
         self.base_dir = os.path.dirname(__file__)
+        self.gallery_dir = os.path.join(self.base_dir, 'gallery')
+        
+        # Ensure gallery directory exists
+        os.makedirs(self.gallery_dir, exist_ok=True)
 
+        self.setup_ui()
+        self.load_images_to_grid()
+
+        # Set up a watcher to automatically update UI when files are added/deleted
+        self.watcher = QFileSystemWatcher([self.gallery_dir])
+        self.watcher.directoryChanged.connect(self.load_images_to_grid)
+
+    def setup_ui(self):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -63,37 +66,12 @@ class GalleryUI(QWidget):
         self.scroll_area.setStyleSheet("QScrollArea { border: none; }")
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        gallery_container = QWidget()
-        gallery_layout = QGridLayout(gallery_container)
-        gallery_layout.setSpacing(10)
-        gallery_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Row 0: Three equal 16:9 landscape blocks
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=True), 0, 0, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=True), 0, 2, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=True), 0, 4, 1, 2)
-        
-        # Row 1: Staggered 16:9 (wide) and 9:16 (narrow) blocks
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=True), 1, 0, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=False, has_content=False), 1, 2, 1, 1)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=True), 1, 3, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=False, has_content=False), 1, 5, 1, 1)
+        self.gallery_container = QWidget()
+        self.gallery_layout = QVBoxLayout(self.gallery_container) 
+        self.gallery_layout.setSpacing(10)
+        self.gallery_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Row 2: Standard 16:9 blocks
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=False), 2, 0, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=False), 2, 2, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=False), 2, 4, 1, 2)
-        
-        # Row 3: 9:16 and 16:9 blocks at the bottom
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=False, has_content=False), 3, 0, 1, 1)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=False), 3, 1, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=True, has_content=False), 3, 3, 1, 2)
-        gallery_layout.addWidget(AspectRatioLabel(is_landscape=False, has_content=False), 3, 5, 1, 1)
-
-        # Push elements to the top if the window is tall
-        gallery_layout.setRowStretch(gallery_layout.rowCount(), 1)
-
-        self.scroll_area.setWidget(gallery_container)
+        self.scroll_area.setWidget(self.gallery_container)
         main_layout.addWidget(self.scroll_area, stretch=3)
 
         # ==========================================
@@ -105,51 +83,102 @@ class GalleryUI(QWidget):
         sidebar_layout.setContentsMargins(30, 40, 30, 40)
         sidebar_layout.setSpacing(15)
 
-        # Title
         title_label = QLabel("Autonomous\nPhotographer Logo")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
         sidebar_layout.addWidget(title_label)
-
-        # Separator Line
         sidebar_layout.addWidget(self.create_separator_line())
 
-        # Menu Buttons (Now using imported QIcons)
         self.btn_home = self.create_sidebar_button("Home", 'home.png')
         self.btn_trash = self.create_sidebar_button("Trash", 'trash.png')
         sidebar_layout.addWidget(self.btn_home)
         sidebar_layout.addWidget(self.btn_trash)
-
-        # Separator Line
         sidebar_layout.addWidget(self.create_separator_line())
 
-        # Push the bottom button down
         sidebar_layout.addStretch()
 
-        # Go Back Button
         self.btn_back = QPushButton(" Go Back")
         self.btn_back.setFixedHeight(50)
         self.btn_back.setStyleSheet("""
             QPushButton {
                 background-color: #1c2024;
-                color: white;
-                font-size: 18px;
-                border-radius: 8px;
+                color: white; font-size: 18px; border-radius: 8px;
             }
             QPushButton:hover { background-color: #2b3038; }
             QPushButton:pressed { background-color: #525a70; }
         """)
         
-        # Load Back Icon
         back_icon_path = os.path.join(self.base_dir, 'assets', 'back.png')
-        self.btn_back.setIcon(QIcon(back_icon_path))
-        self.btn_back.setIconSize(QSize(24, 24))
-        
-        # Connect to close the gallery window
+        if os.path.exists(back_icon_path):
+            self.btn_back.setIcon(QIcon(back_icon_path))
+            self.btn_back.setIconSize(QSize(24, 24))
+            
         self.btn_back.clicked.connect(self.close) 
         sidebar_layout.addWidget(self.btn_back)
 
         main_layout.addWidget(sidebar, stretch=1)
+
+    # --- Dynamic Grid Logic ---
+
+    def clear_layout(self, layout):
+        """Removes all widgets from the layout before a refresh."""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def load_images_to_grid(self):
+        """Packs images left-to-right, wrapping to a new row when space runs out."""
+        self.clear_layout(self.gallery_layout)
+
+        TARGET_HEIGHT = 180  # All images will be exactly this tall
+        SPACING = 10
+        # Estimate the pixel width of the left-hand scroll area
+        MAX_ROW_WIDTH = 700 
+
+        supported_formats = ('.png', '.jpg', '.jpeg', '.bmp')
+        image_files = [f for f in os.listdir(self.gallery_dir) if f.lower().endswith(supported_formats)]
+        
+        current_row_layout = QHBoxLayout()
+        current_row_layout.setSpacing(SPACING)
+        current_row_width = 0
+
+        for filename in image_files:
+            file_path = os.path.join(self.gallery_dir, filename)
+            temp_pixmap = QPixmap(file_path)
+            
+            if temp_pixmap.isNull():
+                continue
+            
+            is_landscape = temp_pixmap.width() >= temp_pixmap.height()
+            
+            # Mathematically perfect 16:9 and 9:16 widths based on our fixed height
+            item_width = int(TARGET_HEIGHT * (16.0 / 9.0)) if is_landscape else int(TARGET_HEIGHT * (9.0 / 16.0))
+
+            # If adding this image pushes us past the screen width, wrap to a new row!
+            if current_row_width + item_width > MAX_ROW_WIDTH and current_row_width > 0:
+                current_row_layout.addStretch() # Push items flush to the left
+                self.gallery_layout.addLayout(current_row_layout)
+                
+                # Reset for the next row
+                current_row_layout = QHBoxLayout()
+                current_row_layout.setSpacing(SPACING)
+                current_row_width = 0
+
+            # Create the thumbnail with strict dimensions
+            thumb = ImageThumbLabel(file_path, item_width, TARGET_HEIGHT)
+            current_row_layout.addWidget(thumb)
+            
+            current_row_width += (item_width + SPACING)
+
+        # Catch the very last row and add it to the page
+        if current_row_width > 0:
+            current_row_layout.addStretch()
+            self.gallery_layout.addLayout(current_row_layout)
+
+        # Push all the rows to the top of the scroll area
+        self.gallery_layout.addStretch()
 
     # --- UI Helper Methods ---
 
@@ -161,21 +190,16 @@ class GalleryUI(QWidget):
         return line
 
     def create_sidebar_button(self, text, icon_filename):
-        btn = QPushButton(f" {text}") # Small space before text
-        
-        # Build path and set icon
+        btn = QPushButton(f" {text}")
         icon_path = os.path.join(self.base_dir, 'assets', icon_filename)
-        btn.setIcon(QIcon(icon_path))
-        btn.setIconSize(QSize(24, 24))
-        
+        if os.path.exists(icon_path):
+            btn.setIcon(QIcon(icon_path))
+            btn.setIconSize(QSize(24, 24))
+            
         btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
-                color: #d1d5db;
-                font-size: 18px;
-                text-align: left;
-                padding: 12px 10px;
-                border: none;
+                background-color: transparent; color: #d1d5db; font-size: 18px;
+                text-align: left; padding: 12px 10px; border: none;
             }
             QPushButton:hover { color: white; background-color: #1c2024; border-radius: 6px;}
         """)
