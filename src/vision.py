@@ -10,7 +10,7 @@ from picamera2.devices import Hailo
 import config
 from hardware import GimbalController
 from pose_utils import postproc_yolov8_pose
-from analyzer import get_subject_sharpness, get_region_exposure, get_subject_contrast, get_region_contrast, get_frame_blur
+from analyzer import get_subject_sharpness, get_region_exposure, get_subject_contrast, get_region_contrast, get_frame_blur, generate_frame_metrics
 
 class CameraWorker(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -51,11 +51,14 @@ class CameraWorker(QThread):
                     gray = cv2.cvtColor(main_frame, cv2.COLOR_RGB2GRAY)
                     h, w = gray.shape
                     
+                    # 1. Initialize these at the top of the loop
+                    person_detected = False
+                    current_bbox = None
+                    
+                    # 2. Hardware and YOLO Logic
                     if self.is_tracking:
-                        
-                        # --- ALWAYS ON: Whole Frame Exposure & Motion Blur ---
+                        # ALWAYS ON: Check global exposure
                         frame_exp_val, frame_exp_status = get_region_exposure(gray)
-                        frame_blur_val, frame_blur_status = get_frame_blur(gray)
                         
                         # --- PRIORITY 1: EXPOSURE RECOVERY ---
                         if frame_exp_status != "Good":
@@ -77,22 +80,7 @@ class CameraWorker(QThread):
                             elif exp_results['bottom'][1] == "Good": err_y = 0.5
                                 
                             self.gimbal.track_target(err_x, err_y)
-                            
-                            # Calculate room contrast for the UI while recovering
-                            room_cont_val, room_cont_status = get_region_contrast(gray)
-                            
-                            self.stats_signal.emit({
-                                "sharpness": "N/A",
-                                "exposure": int(frame_exp_val),
-                                "exposure_status": frame_exp_status,
-                                "contrast": int(room_cont_val),
-                                "contrast_status": room_cont_status,
-                                "blur": int(frame_blur_val),
-                                "blur_status": frame_blur_status
-                            })
-                            
-                            cv2.putText(main_frame, self.active_mode, (20, 40), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                            cv2.putText(main_frame, self.active_mode, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         
                         # --- PRIORITY 2: SUBJECT TRACKING ---
                         else:
@@ -110,52 +98,17 @@ class CameraWorker(QThread):
                                     person_detected = True
                                     self.active_mode = "TRACKING (YOLO)"
                                     person_kps = predictions['keypoints'][0][best_idx].reshape(-1, 2)
-                                    norm_x = person_kps[0][0] / model_w
-                                    norm_y = person_kps[0][1] / model_h
+                                    norm_x, norm_y = person_kps[0][0] / model_w, person_kps[0][1] / model_h
                                     
                                     # --- Image Analysis Logic ---
                                     # 1. Extract Bounding Box for the best detection (Model Space)
                                     bbox = predictions['bboxes'][0][best_idx]
-                                    
-                                    # 2. Scale Box to Main Frame Space (1024x768)
-                                    box_x1 = int((bbox[0] / model_w) * config.WIDTH)
-                                    box_y1 = int((bbox[1] / model_h) * config.HEIGHT)
-                                    box_x2 = int((bbox[2] / model_w) * config.WIDTH)
-                                    box_y2 = int((bbox[3] / model_h) * config.HEIGHT)
-                                    
-                                    sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
-                                    subj_cont_val, subj_cont_stat = get_subject_contrast(main_frame, box_x1, box_y1, box_x2, box_y2)
-                                    
-                                    self.stats_signal.emit({
-                                        "sharpness": int(sharpness),
-                                        "exposure": int(frame_exp_val),
-                                        "exposure_status": frame_exp_status,
-                                        "contrast": int(subj_cont_val),
-                                        "contrast_status": subj_cont_stat,
-                                        "blur": int(frame_blur_val),
-                                        "blur_status": frame_blur_status
-                                    })
-                            
-                                    # --- PRIORITY 3: IDLE / MONITORING ---
-                                    if not person_detected:
-                                        self.active_mode = "IDLE (NO SUBJECT)"
-                                        
-                                        room_cont_val, room_cont_status = get_region_contrast(gray)
-                                        
-                                        self.stats_signal.emit({
-                                            "sharpness": "N/A",
-                                            "exposure": int(frame_exp_val),
-                                            "exposure_status": frame_exp_status,
-                                            "contrast": int(room_cont_val),
-                                            "contrast_status": room_cont_status,
-                                            "blur": int(frame_blur_val),
-                                            "blur_status": frame_blur_status
-                                        })
-                                    
-                                    # (Optional) You can now remove the cv2.putText line here if 
-                                    # you no longer want it drawn directly on the video feed.
-                                    box_color = (0, 255, 0) if sharpness > 100 else (0, 0, 255)
-                                    cv2.rectangle(main_frame, (box_x1, box_y1), (box_x2, box_y2), box_color, 2)
+                                    current_bbox = (
+                                        int((bbox[0] / model_w) * config.WIDTH),
+                                        int((bbox[1] / model_h) * config.HEIGHT),
+                                        int((bbox[2] / model_w) * config.WIDTH),
+                                        int((bbox[3] / model_h) * config.HEIGHT)
+                                    )
                                     
                                     # Composition Logic
                                     dist_to_center = np.sqrt((norm_x - config.CENTER_TARGET[0])**2 + (norm_y - config.CENTER_TARGET[1])**2)
@@ -192,12 +145,22 @@ class CameraWorker(QThread):
                                     cv2.circle(main_frame, (px_x, px_y), 8, node_color, -1)
                                     cv2.putText(main_frame, self.active_mode, (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, node_color, 1)
 
-                    # UI Update
+                            # --- PRIORITY 3: IDLE ---
+                            if not person_detected:
+                                self.active_mode = "IDLE (NO SUBJECT)"
+
+                    # 3. --- GENERATE AND EMIT METRICS ---
+                    frame_metrics = generate_frame_metrics(
+                        main_frame, gray, self.is_tracking, person_detected, current_bbox
+                    )
+                    self.stats_signal.emit(frame_metrics)
+
+                    # 4. UI Update
                     h, w, ch = main_frame.shape
                     rgb_corrected = cv2.cvtColor(main_frame, cv2.COLOR_BGR2RGB) 
                     q_img = QImage(rgb_corrected.data, w, h, ch * w, QImage.Format_RGB888)
                     self.change_pixmap_signal.emit(q_img)
-                    time.sleep(0.01) 
+                    time.sleep(0.01)
                     
                 except Exception as e:
                     print(f"Frame capture error: {e}")
