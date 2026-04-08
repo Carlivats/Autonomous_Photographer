@@ -102,8 +102,9 @@ class GalleryUI(QWidget):
         sidebar_layout.addWidget(self.logo_label)
         sidebar_layout.addWidget(self.create_separator_line())
 
-        self.btn_home = self.create_sidebar_button("Home", 'home.png')
-        self.btn_trash = self.create_sidebar_button("Trash", 'trash.png')
+        self.btn_home = self.create_sidebar_button("Home", 'home.png', is_active=True)
+        self.btn_trash = self.create_sidebar_button("Trash", 'trash.png', is_active=False)
+        
         sidebar_layout.addWidget(self.btn_home)
         sidebar_layout.addWidget(self.btn_trash)
         sidebar_layout.addWidget(self.create_separator_line())
@@ -202,18 +203,38 @@ class GalleryUI(QWidget):
         line.setStyleSheet("background-color: #4a505c; max-height: 1px;")
         return line
 
-    def create_sidebar_button(self, text, icon_filename):
+    def create_sidebar_button(self, text, icon_filename, is_active=False):
         btn = QPushButton(f" {text}")
         icon_path = os.path.join(self.base_dir, 'assets', icon_filename)
         if os.path.exists(icon_path):
             btn.setIcon(QIcon(icon_path))
             btn.setIconSize(QSize(24, 24))
             
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent; color: #d1d5db; font-size: 18px;
-                text-align: left; padding: 12px 10px; border: none;
-            }
-            QPushButton:hover { color: white; background-color: #1c2024; border-radius: 6px;}
-        """)
+        if is_active:
+            # Active State: Distinct background, bolder text
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2b3038; 
+                    color: white; 
+                    font-size: 18px;
+                    font-weight: bold;
+                    text-align: left; 
+                    padding: 12px 10px; 
+                    border: none;
+                    border-radius: 6px;
+                }
+            """)
+        else:
+            # Idle State: Transparent background, fades out slightly
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent; 
+                    color: #a0aabf; 
+                    font-size: 18px;
+                    text-align: left; 
+                    padding: 12px 10px; 
+                    border: none;
+                }
+                QPushButton:hover { color: white; background-color: #1c2024; border-radius: 6px;}
+            """)
         return btn
