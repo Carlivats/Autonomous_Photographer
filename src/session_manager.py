@@ -55,22 +55,31 @@ class CaptureSessionManager(QObject):
                 self.stop_session()
 
     def should_keep_photo(self, metrics):
-        """The AI logic to evaluate frame quality."""
+        """The AI logic to evaluate frame quality with debug reporting."""
+        reason = ""
+        
         # 1. Must have a subject detected
         if not metrics.get("subject_info"):
-            return False
+            reason = "No subject detected."
             
         # 2. Exposure must be balanced
-        if metrics.get("exposure_status") != "Good":
-            return False
-
-        # 3. Scene must be stable (no motion blur)
-        if metrics.get("blur_status") != "Good":
-            return False
-
+        elif metrics.get("exposure_status") != "Good":
+            reason = f"Bad exposure: {metrics.get('exposure_status')}"
+            
+        # 3. Scene must be stable
+        elif metrics.get("blur_status") != "Clear":
+            reason = f"Motion blur: {metrics.get('blur_status')}"
+            
         # 4. Subject must be in focus
-        sharpness = metrics.get("sharpness")
-        if isinstance(sharpness, (int, float)) and sharpness < 100: # Using your 100.0 threshold
+        elif isinstance(metrics.get("sharpness"), (int, float)) and metrics.get("sharpness") < 100:
+            reason = f"Subject too soft. Sharpness: {metrics.get('sharpness')}"
+
+        # If there is a reason to reject, print it occasionally and return False
+        if reason:
+            # Print the rejection reason once every ~30 frames (about once a second)
+            if getattr(self, '_debug_counter', 0) % 30 == 0:
+                print(f"Skipping frame: {reason}")
+            self._debug_counter = getattr(self, '_debug_counter', 0) + 1
             return False
 
         # If it passes all tests, it's a keeper!
