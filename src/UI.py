@@ -9,6 +9,8 @@ from PyQt5.QtGui import QPixmap, QIcon
 # Import our custom worker thread
 from vision import CameraWorker
 from session_manager import CaptureSessionManager
+from gallery import GalleryUI
+
 
 class AutonomousPhotographerUI(QWidget):
     def __init__(self, model_path):
