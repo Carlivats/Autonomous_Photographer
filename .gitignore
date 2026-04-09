@@ -423,3 +423,4 @@ __pycache__/
 *.pyc
 
 src/gallery/
+gallery/
