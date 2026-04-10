@@ -160,11 +160,12 @@ class AutonomousPhotographerUI(QWidget):
         self.thread.start()
 
     # --- UI Slots (Actions) ---
-    def update_image(self, q_img):
-        # Save the current frame to memory so the session manager can grab it
-        self.current_frame = q_img 
+    def update_image(self, q_img_annotated, q_img_clean):
+        # Save the CLEAN frame to memory so the session manager can grab it
+        self.current_frame = q_img_clean.copy() 
         
-        pixmap = QPixmap.fromImage(q_img)
+        # Show the ANNOTATED frame with all the tracking lines on the UI screen
+        pixmap = QPixmap.fromImage(q_img_annotated)
         scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled_pixmap)
 
