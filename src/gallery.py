@@ -34,14 +34,20 @@ class ImageThumbLabel(QLabel):
             self.setPixmap(scaled.copy(crop_rect))
 
 class GalleryUI(QWidget):
-    def __init__(self, parent=None):
+    # 1. Add gallery_dir=None to the parameters
+    def __init__(self, parent=None, gallery_dir=None):
         super().__init__()
         self.setWindowTitle("Gallery View")
         self.resize(1024, 600)
         self.setStyleSheet("background-color: #16181d; color: white;")
 
         self.base_dir = os.path.dirname(__file__)
-        self.gallery_dir = os.path.join(self.base_dir, 'gallery')
+        
+        # 2. Use the provided directory, or default to the local 'gallery' folder
+        if gallery_dir:
+            self.gallery_dir = gallery_dir
+        else:
+            self.gallery_dir = os.path.join(self.base_dir, 'gallery')
         
         # Ensure gallery directory exists
         os.makedirs(self.gallery_dir, exist_ok=True)
