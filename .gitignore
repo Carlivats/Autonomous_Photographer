@@ -424,3 +424,7 @@ __pycache__/
 
 src/gallery/
 gallery/
+
+src/build/
+src/dist/
+*.pkg
