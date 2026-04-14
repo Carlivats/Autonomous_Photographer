@@ -13,8 +13,7 @@ from pose_utils import postproc_yolov8_pose
 from analyzer import get_subject_sharpness, get_region_exposure, get_subject_contrast, get_region_contrast, get_frame_blur, generate_frame_metrics
 
 class CameraWorker(QThread):
-    change_pixmap_signal = pyqtSignal(QImage)
-
+    change_pixmap_signal = pyqtSignal(QImage, QImage)
     stats_signal = pyqtSignal(dict)
 
     def __init__(self, model_path):
@@ -49,7 +48,10 @@ class CameraWorker(QThread):
                 try:
                     main_frame = self.picam2.capture_array("main")
                     gray = cv2.cvtColor(main_frame, cv2.COLOR_RGB2GRAY)
-                    h, w = gray.shape
+                    h, w, ch = main_frame.shape
+                    
+                    # --- Make a copy for drawing ---
+                    annotated_frame = main_frame.copy()
                     
                     # 1. Initialize these at the top of the loop
                     person_detected = False
@@ -57,7 +59,6 @@ class CameraWorker(QThread):
                     
                     # 2. Hardware and YOLO Logic
                     if self.is_tracking:
-                        # ALWAYS ON: Check global exposure
                         frame_exp_val, frame_exp_status = get_region_exposure(gray)
                         
                         # --- PRIORITY 1: EXPOSURE RECOVERY ---
@@ -80,7 +81,7 @@ class CameraWorker(QThread):
                             elif exp_results['bottom'][1] == "Good": err_y = 0.5
                                 
                             self.gimbal.track_target(err_x, err_y)
-                            cv2.putText(main_frame, self.active_mode, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                            cv2.putText(annotated_frame, self.active_mode, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         
                         # --- PRIORITY 2: SUBJECT TRACKING ---
                         else:
@@ -103,12 +104,20 @@ class CameraWorker(QThread):
                                     # --- Image Analysis Logic ---
                                     # 1. Extract Bounding Box for the best detection (Model Space)
                                     bbox = predictions['bboxes'][0][best_idx]
-                                    current_bbox = (
-                                        int((bbox[0] / model_w) * config.WIDTH),
-                                        int((bbox[1] / model_h) * config.HEIGHT),
-                                        int((bbox[2] / model_w) * config.WIDTH),
-                                        int((bbox[3] / model_h) * config.HEIGHT)
-                                    )
+                                    
+                                    # 2. Scale Box to Main Frame Space (1024x768)
+                                    box_x1 = int((bbox[0] / model_w) * config.WIDTH)
+                                    box_y1 = int((bbox[1] / model_h) * config.HEIGHT)
+                                    box_x2 = int((bbox[2] / model_w) * config.WIDTH)
+                                    box_y2 = int((bbox[3] / model_h) * config.HEIGHT)
+                                    
+                                    current_bbox = (box_x1, box_y1, box_x2, box_y2)
+                                    
+                                    # 3. Draw the Sharpness Indicator Box on the ANNOTATED copy
+                                    sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
+                                    # Look at line 145 in your code:
+                                    box_color = (0, 255, 0) if sharpness > 100 else (0, 0, 255)
+                                    cv2.rectangle(main_frame, (box_x1, box_y1), (box_x2, box_y2), box_color, 2)
                                     
                                     # Composition Logic
                                     dist_to_center = np.sqrt((norm_x - config.CENTER_TARGET[0])**2 + (norm_y - config.CENTER_TARGET[1])**2)
@@ -130,20 +139,26 @@ class CameraWorker(QThread):
                                     err_x, err_y = norm_x - target_x, norm_y - target_y
                                     self.gimbal.track_target(err_x, err_y)
 
+                                    sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
+                                    
+                                    # --- raw on annotated_frame instead of main_frame ---
+                                    box_color = (0, 255, 0) if sharpness > 100 else (0, 0, 255)
+                                    cv2.rectangle(annotated_frame, (box_x1, box_y1), (box_x2, box_y2), box_color, 2)
+
                                     # Visuals
                                     if self.active_mode == "CENTER":
-                                        cv2.drawMarker(main_frame, (config.FRAME_CX, config.FRAME_CY), (100, 100, 100), cv2.MARKER_CROSS, 20, 1)
+                                        cv2.drawMarker(annotated_frame, (config.FRAME_CX, config.FRAME_CY), (100, 100, 100), cv2.MARKER_CROSS, 20, 1)
                                     else:
                                         for px in [0.33, 0.66]:
-                                            cv2.line(main_frame, (int(config.WIDTH * px), 0), (int(config.WIDTH * px), config.HEIGHT), (100, 100, 100), 1)
-                                            cv2.line(main_frame, (0, int(config.HEIGHT * px)), (config.WIDTH, int(config.HEIGHT * px)), (100, 100, 100), 1)
+                                            cv2.line(annotated_frame, (int(config.WIDTH * px), 0), (int(config.WIDTH * px), config.HEIGHT), (100, 100, 100), 1)
+                                            cv2.line(annotated_frame, (0, int(config.HEIGHT * px)), (config.WIDTH, int(config.HEIGHT * px)), (100, 100, 100), 1)
 
                                     # 1. Draw Tracking Node
                                     px_x, px_y = int(norm_x * config.WIDTH), int(norm_y * config.HEIGHT)
                                     node_color = (0, 255, 0) if (abs(err_x) < config.DEADZONE and abs(err_y) < config.DEADZONE) else (0, 200, 255)
-                                    cv2.circle(main_frame, (int(target_x * config.WIDTH), int(target_y * config.HEIGHT)), 15, (255, 255, 0), 2)
-                                    cv2.circle(main_frame, (px_x, px_y), 8, node_color, -1)
-                                    cv2.putText(main_frame, self.active_mode, (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, node_color, 1)
+                                    cv2.circle(annotated_frame, (int(target_x * config.WIDTH), int(target_y * config.HEIGHT)), 15, (255, 255, 0), 2)
+                                    cv2.circle(annotated_frame, (px_x, px_y), 8, node_color, -1)
+                                    cv2.putText(annotated_frame, self.active_mode, (px_x + 15, px_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, node_color, 1)
 
                             # --- PRIORITY 3: IDLE ---
                             if not person_detected:
@@ -155,17 +170,21 @@ class CameraWorker(QThread):
                     )
                     self.stats_signal.emit(frame_metrics)
 
-                    # 4. UI Update
-                    h, w, ch = main_frame.shape
-                    rgb_corrected = cv2.cvtColor(main_frame, cv2.COLOR_BGR2RGB) 
-                    q_img = QImage(rgb_corrected.data, w, h, ch * w, QImage.Format_RGB888)
-                    self.change_pixmap_signal.emit(q_img)
+                    # 4. --- UI Update for BOTH frames (Add .copy() to enforce memory safety) ---
+                    # Create the annotated QImage for the screen
+                    rgb_annotated = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB) 
+                    q_img_annotated = QImage(rgb_annotated.data, w, h, ch * w, QImage.Format_RGB888).copy()
+                    
+                    # Create the clean QImage for saving
+                    rgb_clean = cv2.cvtColor(main_frame, cv2.COLOR_BGR2RGB)
+                    q_img_clean = QImage(rgb_clean.data, w, h, ch * w, QImage.Format_RGB888).copy()
+
+                    # Emit both!
+                    self.change_pixmap_signal.emit(q_img_annotated, q_img_clean)
                     time.sleep(0.01)
                     
                 except Exception as e:
                     print(f"Frame capture error: {e}")
-
-            self.picam2.stop()
 
     def stop(self):
         self._run_flag = False

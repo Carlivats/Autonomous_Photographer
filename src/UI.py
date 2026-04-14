@@ -19,6 +19,8 @@ class AutonomousPhotographerUI(QWidget):
         self.resize(1024, 600)
         self.show()
         self.setStyleSheet("background-color: #16181d;")
+        home_dir = os.path.expanduser("~")
+        self.custom_gallery_folder = os.path.expanduser("~/Pictures/AutonomousPhotographer")
 
         icon_path = os.path.join(os.path.dirname(__file__), 'assets', 'gear.png')
 
@@ -147,7 +149,7 @@ class AutonomousPhotographerUI(QWidget):
         main_layout.addLayout(control_layout, stretch=1)
 
         # --- Initialize Session Manager ---
-        self.session_manager = CaptureSessionManager()
+        self.session_manager = CaptureSessionManager(gallery_dir=self.custom_gallery_folder)
         self.session_manager.session_finished_signal.connect(self.end_session_ui)
 
         # --- Initialize and Start the Camera Thread ---
@@ -158,11 +160,12 @@ class AutonomousPhotographerUI(QWidget):
         self.thread.start()
 
     # --- UI Slots (Actions) ---
-    def update_image(self, q_img):
-        # Save the current frame to memory so the session manager can grab it
-        self.current_frame = q_img 
+    def update_image(self, q_img_annotated, q_img_clean):
+        # Save the CLEAN frame to memory so the session manager can grab it
+        self.current_frame = q_img_clean.copy() 
         
-        pixmap = QPixmap.fromImage(q_img)
+        # Show the ANNOTATED frame with all the tracking lines on the UI screen
+        pixmap = QPixmap.fromImage(q_img_annotated)
         scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(scaled_pixmap)
 
@@ -216,7 +219,7 @@ class AutonomousPhotographerUI(QWidget):
     def open_gallery(self):
         print("Opening Gallery...")
         # Create an instance of the Gallery UI
-        self.gallery_window = GalleryUI()
+        self.gallery_window = GalleryUI(gallery_dir=self.custom_gallery_folder)
         
         # Show the gallery window
         self.gallery_window.show()
