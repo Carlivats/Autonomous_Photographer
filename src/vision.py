@@ -56,6 +56,7 @@ class CameraWorker(QThread):
                     # 1. Initialize these at the top of the loop
                     person_detected = False
                     current_bbox = None
+                    current_comp_score = 0.0
                     
                     # 2. Hardware and YOLO Logic
                     if self.is_tracking:
@@ -123,6 +124,11 @@ class CameraWorker(QThread):
                                     dist_to_center = np.sqrt((norm_x - config.CENTER_TARGET[0])**2 + (norm_y - config.CENTER_TARGET[1])**2)
                                     best_rot = min(config.INTERSECTIONS, key=lambda p: np.sqrt((norm_x - p[0])**2 + (norm_y - p[1])**2))
                                     dist_to_rot = np.sqrt((norm_x - best_rot[0])**2 + (norm_y - best_rot[1])**2)
+
+                                    # Convert the shortest distance into a 0-100 score. 
+                                    # We multiply by 300 to scale the penalty (you can tweak this number to be more or less strict).
+                                    best_dist = min(dist_to_center, dist_to_rot)
+                                    current_comp_score = max(0.0, 100.0 - (best_dist * 300.0))
                                     
                                     biased_dist_to_rot = dist_to_rot * config.THIRDS_BIAS 
                                     if self.active_mode == "THIRDS":
@@ -168,6 +174,10 @@ class CameraWorker(QThread):
                     frame_metrics = generate_frame_metrics(
                         main_frame, gray, self.is_tracking, person_detected, current_bbox
                     )
+
+                    # Inject our custom score here so it goes to the UI and the JSON file
+                    frame_metrics["composition_score"] = round(current_comp_score, 2) 
+
                     self.stats_signal.emit(frame_metrics)
 
                     # 4. --- UI Update for BOTH frames (Add .copy() to enforce memory safety) ---

@@ -39,14 +39,20 @@ class CaptureSessionManager(QObject):
     def calculate_score(self, metrics):
         """
         Generates a composite score to rank photos against each other.
-        You can expand this later when you implement your Composition Evaluation!
         """
+        # Base score from sharpness
         score = metrics.get("sharpness", 0)
         
         # Give a slight bonus for higher contrast (punchier images)
         contrast = metrics.get("contrast", 0)
         if isinstance(contrast, (int, float)):
             score += (contrast * 0.2) 
+            
+        comp_score = metrics.get("composition_score", 0)
+        
+        # We multiply by 1.5 to give composition a heavier weight
+        if isinstance(comp_score, (int, float)):
+            score += (comp_score * 1.5)
             
         return score
 
