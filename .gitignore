@@ -428,3 +428,5 @@ gallery/
 src/build/
 src/dist/
 *.pkg
+
+*.log
