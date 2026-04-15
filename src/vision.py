@@ -32,7 +32,6 @@ class CameraWorker(QThread):
         # --- Motion/Blur Stability Tracking ---
         self.stability_counter = 0
         self.STABILITY_REQUIRED = 2
-        self.SHARP_THRESHOLD = 100.0
 
     def run(self):
         with Hailo(self.model_path) as hailo:
@@ -150,8 +149,8 @@ class CameraWorker(QThread):
 
                                     # 2D. Image Analysis
                                     sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
-                                    is_sharp = sharpness > self.SHARP_THRESHOLD
-                                    
+                                    is_sharp = sharpness > config.SHARPNESS_THRESHOLD
+
                                     # 2E. Drawing
                                     annotated_frame = FrameAnnotator.draw_tracking_ui(
                                         annotated_frame, current_bbox, target_pos[0], target_pos[1], 

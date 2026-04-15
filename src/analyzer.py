@@ -145,7 +145,7 @@ def get_frame_blur(gray_image):
     # Calculate Laplacian variance directly on the provided grayscale image
     blur_score = cv2.Laplacian(gray_image, cv2.CV_64F).var()
 
-    if blur_score < 60:
+    if blur_score < 30:
         status = "Blurry"
     else:
         status = "Clear"
