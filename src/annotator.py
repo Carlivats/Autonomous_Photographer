@@ -30,7 +30,10 @@ class FrameAnnotator:
         
         # 2. Draw Composition Grid / Markers
         if active_mode == "CENTER":
-            cv2.drawMarker(frame, (config.FRAME_CX, config.FRAME_CY), (100, 100, 100), cv2.MARKER_CROSS, 20, 1)
+            # Dynamically calculate the crosshair position based on config.CENTER_TARGET
+            center_px_x = int(config.CENTER_TARGET[0] * config.WIDTH)
+            center_px_y = int(config.CENTER_TARGET[1] * config.HEIGHT)
+            cv2.drawMarker(frame, (center_px_x, center_px_y), (100, 100, 100), cv2.MARKER_CROSS, 20, 1)
         else:
             # Rule of Thirds Grid Lines
             # Vertical lines (33% and 66% across)
