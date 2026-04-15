@@ -99,16 +99,41 @@ class CameraWorker(QThread):
                                     person_detected = True
                                     
                                     # 2A. Extract spatial data
-                                    person_kps = predictions['keypoints'][0][best_idx].reshape(-1, 2)
-                                    norm_x, norm_y = person_kps[0][0] / model_w, person_kps[0][1] / model_h
-                                    
                                     bbox = predictions['bboxes'][0][best_idx]
+                                    person_kps = predictions['keypoints'][0][best_idx].reshape(-1, 2)
+                                    
+                                    # --- POINT 1: The Exact Keypoint (Nose) ---
+                                    nose_norm_x = person_kps[0][0] / model_w
+                                    nose_norm_y = person_kps[0][1] / model_h
+                                    
+                                    # --- POINT 2: The Calculated Bounding Box Center-Top ---
+                                    box_w = bbox[2] - bbox[0]
+                                    box_h = bbox[3] - bbox[1]
+                                    
+                                    # Center of the X axis
+                                    box_norm_x = (bbox[0] + (box_w / 2.0)) / model_w
+                                    
+                                    # 15% down from the top edge (Usually where the center of the face sits in a YOLO box)
+                                    box_norm_y = (bbox[1] + (box_h * 0.15)) / model_h 
+                                    
+                                    # --- THE TWIST: Create the Definite Point ---
+                                    # 75% power to the nose (accuracy) / 25% power to the box (stability)
+                                    NOSE_WEIGHT = 0.25
+                                    BOX_WEIGHT = 0.75
+                                    
+                                    norm_x = (nose_norm_x * NOSE_WEIGHT) + (box_norm_x * BOX_WEIGHT)
+                                    norm_y = (nose_norm_y * NOSE_WEIGHT) + (box_norm_y * BOX_WEIGHT)
+
+                                    # Calculate bounding box for the drawing/sharpness logic
                                     box_x1 = int((bbox[0] / model_w) * config.WIDTH)
                                     box_y1 = int((bbox[1] / model_h) * config.HEIGHT)
                                     box_x2 = int((bbox[2] / model_w) * config.WIDTH)
                                     box_y2 = int((bbox[3] / model_h) * config.HEIGHT)
                                     current_bbox = (box_x1, box_y1, box_x2, box_y2)
-                                    px_x, px_y = int(norm_x * config.WIDTH), int(norm_y * config.HEIGHT)
+                                    
+                                    # Convert the definite point to pixels for the UI tracker
+                                    px_x = int(norm_x * config.WIDTH)
+                                    px_y = int(norm_y * config.HEIGHT)
                                     
                                     # 2B. Composition Math
                                     target_pos, self.active_mode, best_dist = CompositionEngine.get_best_target(norm_x, norm_y, self.active_mode)
