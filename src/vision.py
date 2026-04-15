@@ -117,12 +117,9 @@ class CameraWorker(QThread):
                                     box_norm_y = (bbox[1] + (box_h * 0.15)) / model_h 
                                     
                                     # --- THE TWIST: Create the Definite Point ---
-                                    # 75% power to the nose (accuracy) / 25% power to the box (stability)
-                                    NOSE_WEIGHT = 0.25
-                                    BOX_WEIGHT = 0.75
                                     
-                                    norm_x = (nose_norm_x * NOSE_WEIGHT) + (box_norm_x * BOX_WEIGHT)
-                                    norm_y = (nose_norm_y * NOSE_WEIGHT) + (box_norm_y * BOX_WEIGHT)
+                                    norm_x = (nose_norm_x * config.NOSE_WEIGHT) + (box_norm_x * config.BOX_WEIGHT)
+                                    norm_y = (nose_norm_y * config.NOSE_WEIGHT) + (box_norm_y * config.BOX_WEIGHT)
 
                                     # Calculate bounding box for the drawing/sharpness logic
                                     box_x1 = int((bbox[0] / model_w) * config.WIDTH)
