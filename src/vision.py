@@ -131,9 +131,16 @@ class CameraWorker(QThread):
                                     box_y2 = int((bbox[3] / model_h) * config.HEIGHT)
                                     current_bbox = (box_x1, box_y1, box_x2, box_y2)
                                     
-                                    # Convert the definite point to pixels for the UI tracker
+                                    # Convert all three points to pixels
+                                    # The Definite Point
                                     px_x = int(norm_x * config.WIDTH)
                                     px_y = int(norm_y * config.HEIGHT)
+                                    
+                                    # The Nose Point
+                                    nose_px = (int(nose_norm_x * config.WIDTH), int(nose_norm_y * config.HEIGHT))
+                                    
+                                    # The Box Point
+                                    box_px = (int(box_norm_x * config.WIDTH), int(box_norm_y * config.HEIGHT))
                                     
                                     # 2B. Composition Math
                                     target_pos, self.active_mode, best_dist = CompositionEngine.get_best_target(norm_x, norm_y, self.active_mode)
@@ -151,7 +158,7 @@ class CameraWorker(QThread):
                                     # 2E. Drawing
                                     annotated_frame = FrameAnnotator.draw_tracking_ui(
                                         annotated_frame, current_bbox, target_pos[0], target_pos[1], 
-                                        px_x, px_y, self.active_mode, is_sharp
+                                        px_x, px_y, self.active_mode, is_sharp, nose_px, box_px
                                     )
 
                             # --- PRIORITY 3: IDLE ---

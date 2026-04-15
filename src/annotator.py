@@ -4,7 +4,7 @@ import config
 
 class FrameAnnotator:
     @staticmethod
-    def draw_tracking_ui(frame, bbox, target_x, target_y, px_x, px_y, active_mode, is_sharp):
+    def draw_tracking_ui(frame, bbox, target_x, target_y, px_x, px_y, active_mode, is_sharp, nose_px=None, box_px=None):
         """
         Draws all UI elements onto the frame.
         
@@ -42,15 +42,24 @@ class FrameAnnotator:
             for py in [0.33, 0.66]:
                 y_pos = int(config.HEIGHT * py)
                 cv2.line(frame, (0, y_pos), (config.WIDTH, y_pos), (100, 100, 100), 1)
+
+        # 3. Draw Sensor Fusion Visualization (The Twist)
+        if nose_px and box_px:
+            # Draw a thin white line connecting the Box Anchor to the Nose Anchor
+            cv2.line(frame, nose_px, box_px, (200, 200, 200), 1)
+            
+            # Draw the Nose Point (Magenta)
+            cv2.circle(frame, nose_px, 4, (255, 0, 255), -1)
+            
+            # Draw the Box Point (Cyan)
+            cv2.circle(frame, box_px, 4, (255, 255, 0), -1)
                 
-        # 3. Draw Tracking Nodes
-        # Draw the destination target (the composition intersection the camera is aiming for)
+        # 4. Draw Tracking Nodes
         target_px_x = int(target_x * config.WIDTH)
         target_px_y = int(target_y * config.HEIGHT)
         cv2.circle(frame, (target_px_x, target_px_y), 15, (255, 255, 0), 2)
         
-        # Draw the current position of the subject's tracking node
-        # Green node if they are sharp, orange if they are soft/moving fast
+        # Draw the Definite Point (The weighted average)
         node_color = (0, 255, 0) if is_sharp else (0, 200, 255) 
         cv2.circle(frame, (px_x, px_y), 8, node_color, -1)
         
