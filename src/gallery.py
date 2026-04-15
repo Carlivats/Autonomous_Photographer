@@ -160,6 +160,9 @@ class GalleryUI(QWidget):
         supported_formats = ('.png', '.jpg', '.jpeg', '.bmp')
         image_files = [f for f in os.listdir(self.gallery_dir) if f.lower().endswith(supported_formats)]
         
+        # Sort the files by their modification time (newest first)
+        image_files.sort(key=lambda x: os.path.getmtime(os.path.join(self.gallery_dir, x)), reverse=True)
+        
         current_row_layout = QHBoxLayout()
         current_row_layout.setSpacing(SPACING)
         current_row_width = 0
