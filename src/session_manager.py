@@ -39,15 +39,25 @@ class CaptureSessionManager(QObject):
     def calculate_score(self, metrics):
         """
         Generates a composite score to rank photos against each other.
+        Caps environmental metrics so texture doesn't overpower composition.
         """
-        # Base score from sharpness
-        score = metrics.get("sharpness", 0)
+        score = 0.0
         
-        # Give a slight bonus for higher contrast (punchier images)
-        contrast = metrics.get("contrast", 0)
-        if isinstance(contrast, (int, float)):
-            score += (contrast * 0.2) 
+        # 1. Cap Sharpness (Max 50 points)
+        # If a face is 45, it gets 45 points. If a PC screen is 250, it gets clamped to 50.
+        raw_sharpness = metrics.get("sharpness", 0)
+        if isinstance(raw_sharpness, (int, float)):
+            capped_sharpness = min(raw_sharpness, 50.0) 
+            score += capped_sharpness
             
+        # 2. Add Contrast (Bonus points, usually around 10-20, cap it just in case)
+        raw_contrast = metrics.get("contrast", 0)
+        if isinstance(raw_contrast, (int, float)):
+            capped_contrast = min(raw_contrast, 80.0)
+            score += (capped_contrast * 0.2) 
+            
+        # 3. Composition is the Heavyweight (0 to 100 points, multiplied by 1.5)
+        # Max possible points: 150. This ensures framing is always the most important factor.
         comp_score = metrics.get("composition_score", 0)
         
         # We multiply by 1.5 to give composition a heavier weight
