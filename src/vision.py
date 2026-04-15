@@ -117,7 +117,7 @@ class CameraWorker(QThread):
                                     sharpness = get_subject_sharpness(main_frame, box_x1, box_y1, box_x2, box_y2)
                                     # Look at line 145 in your code:
                                     box_color = (0, 255, 0) if sharpness > 100 else (0, 0, 255)
-                                    cv2.rectangle(main_frame, (box_x1, box_y1), (box_x2, box_y2), box_color, 2)
+                                    cv2.rectangle(annotated_frame, (box_x1, box_y1), (box_x2, box_y2), box_color, 2)
                                     
                                     # Composition Logic
                                     dist_to_center = np.sqrt((norm_x - config.CENTER_TARGET[0])**2 + (norm_y - config.CENTER_TARGET[1])**2)
