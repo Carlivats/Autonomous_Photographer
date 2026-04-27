@@ -34,3 +34,5 @@ TILT_CHANNEL = 0
 
 # Analysis Thresholds
 SHARPNESS_THRESHOLD = 60.0
+
+MAX_SAVED_PHOTOS = 5

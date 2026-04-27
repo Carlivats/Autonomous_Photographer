@@ -1,6 +1,7 @@
 # session_manager.py
 import os
 import json
+import config
 from datetime import datetime
 from PyQt5.QtCore import QObject, pyqtSignal
 
@@ -12,7 +13,7 @@ class CaptureSessionManager(QObject):
         super().__init__()
         self.gallery_dir = gallery_dir
         self.is_active = False
-        self.max_saved = 3  # The number of "Best" photos to keep
+        self.max_saved = config.MAX_SAVED_PHOTOS  # The number of "Best" photos to keep
         self.top_photos = []  # List of dicts storing { 'score', 'image_path', 'json_path' }
         self.cooldown_frames = 0 
         self._debug_counter = 0
@@ -21,7 +22,7 @@ class CaptureSessionManager(QObject):
         if not os.path.exists(self.gallery_dir):
             os.makedirs(self.gallery_dir)
 
-    def start_session(self, target_photos=3):
+    def start_session(self, target_photos=config.MAX_SAVED_PHOTOS):
         """Initializes a new continuous photography session."""
         self.max_saved = target_photos
         self.top_photos = [] # Reset our top photos cache

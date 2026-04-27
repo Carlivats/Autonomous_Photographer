@@ -177,7 +177,7 @@ class AutonomousPhotographerUI(QWidget):
             self.thread.is_tracking = True
             self.btn_toggle.setStyleSheet(self.btn_active_style)
             
-            self.session_manager.start_session(target_photos=3)
+            self.session_manager.start_session()
         else:
             # Turn OFF Manually
             self.end_session_ui()
