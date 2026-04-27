@@ -63,6 +63,10 @@ class GalleryUI(QWidget):
         # Ensure gallery directory exists
         os.makedirs(self.gallery_dir, exist_ok=True)
 
+        self.trash_dir = os.path.join(self.gallery_dir, '.trash')
+        os.makedirs(self.trash_dir, exist_ok=True)
+        self.current_view = "home"
+
         self.setup_ui()
         self.load_images_to_grid()
 
@@ -122,6 +126,9 @@ class GalleryUI(QWidget):
         self.btn_home = self.create_sidebar_button("Home", 'home.png', is_active=True)
         self.btn_trash = self.create_sidebar_button("Trash", 'trash.png', is_active=False)
         
+        self.btn_home.clicked.connect(lambda: self.switch_view("home"))
+        self.btn_trash.clicked.connect(lambda: self.switch_view("trash"))
+        
         sidebar_layout.addWidget(self.btn_home)
         sidebar_layout.addWidget(self.btn_trash)
         sidebar_layout.addWidget(self.create_separator_line())
@@ -149,6 +156,36 @@ class GalleryUI(QWidget):
 
         main_layout.addWidget(sidebar, stretch=1)
 
+        self.btn_active_style = """
+            QPushButton { background-color: #2b3038; color: white; font-size: 18px; font-weight: bold; text-align: left; padding: 12px 10px; border: none; border-radius: 6px; }
+        """
+        self.btn_idle_style = """
+            QPushButton { background-color: transparent; color: #a0aabf; font-size: 18px; text-align: left; padding: 12px 10px; border: none; }
+            QPushButton:hover { color: white; background-color: #1c2024; border-radius: 6px;}
+        """
+
+    def switch_view(self, mode):
+        """Swaps the UI between the Home folder and the Trash folder."""
+        self.current_view = mode
+        
+        # Update button visuals and set the target directory
+        if mode == "home":
+            self.btn_home.setStyleSheet(self.btn_active_style)
+            self.btn_trash.setStyleSheet(self.btn_idle_style)
+            target_dir = self.gallery_dir
+        else:
+            self.btn_home.setStyleSheet(self.btn_idle_style)
+            self.btn_trash.setStyleSheet(self.btn_active_style)
+            target_dir = self.trash_dir
+
+        # Safely re-point the auto-refresher to the new folder
+        if self.watcher.directories():
+            self.watcher.removePaths(self.watcher.directories())
+        self.watcher.addPath(target_dir)
+        
+        # Redraw the grid with the new folder
+        self.load_images_to_grid()
+
     # --- Dynamic Grid Logic ---
 
     def clear_layout(self, layout):
@@ -163,66 +200,64 @@ class GalleryUI(QWidget):
         """Packs images left-to-right, wrapping to a new row when space runs out."""
         self.clear_layout(self.gallery_layout)
 
-        TARGET_HEIGHT = 180  # All images will be exactly this tall
+        # 1. Safely determine which folder to read from based on the current tab
+        target_dir = self.gallery_dir if getattr(self, 'current_view', 'home') == "home" else self.trash_dir
+
+        TARGET_HEIGHT = 180 
         SPACING = 10
-        # Estimate the pixel width of the left-hand scroll area
         MAX_ROW_WIDTH = 700 
 
         supported_formats = ('.png', '.jpg', '.jpeg', '.bmp')
-        image_files = [f for f in os.listdir(self.gallery_dir) if f.lower().endswith(supported_formats)]
         
-        # Sort the files by their modification time (newest first)
-        image_files.sort(key=lambda x: os.path.getmtime(os.path.join(self.gallery_dir, x)), reverse=True)
+        # 2. Get the files from the CORRECT directory
+        image_files = [f for f in os.listdir(target_dir) if f.lower().endswith(supported_formats)]
+        
+        # 3. Sort them using the CORRECT directory path
+        image_files.sort(key=lambda x: os.path.getmtime(os.path.join(target_dir, x)), reverse=True)
         
         current_row_layout = QHBoxLayout()
         current_row_layout.setSpacing(SPACING)
         current_row_width = 0
 
         for filename in image_files:
-            file_path = os.path.join(self.gallery_dir, filename)
+            # 4. Build the final file path from the CORRECT directory
+            file_path = os.path.join(target_dir, filename)
             temp_pixmap = QPixmap(file_path)
             
             if temp_pixmap.isNull():
                 continue
             
             is_landscape = temp_pixmap.width() >= temp_pixmap.height()
-            
-            # Mathematically perfect 16:9 and 9:16 widths based on our fixed height
             item_width = int(TARGET_HEIGHT * (16.0 / 9.0)) if is_landscape else int(TARGET_HEIGHT * (9.0 / 16.0))
 
-            # If adding this image pushes us past the screen width, wrap to a new row!
             if current_row_width + item_width > MAX_ROW_WIDTH and current_row_width > 0:
-                current_row_layout.addStretch() # Push items flush to the left
+                current_row_layout.addStretch() 
                 self.gallery_layout.addLayout(current_row_layout)
-                
-                # Reset for the next row
                 current_row_layout = QHBoxLayout()
                 current_row_layout.setSpacing(SPACING)
                 current_row_width = 0
 
-            # Create the thumbnail with strict dimensions
             thumb = ImageThumbLabel(file_path, item_width, TARGET_HEIGHT)
-
             thumb.clicked.connect(self.open_full_image)
-            
             current_row_layout.addWidget(thumb)
             
             current_row_width += (item_width + SPACING)
 
-        # Catch the very last row and add it to the page
         if current_row_width > 0:
             current_row_layout.addStretch()
             self.gallery_layout.addLayout(current_row_layout)
 
-        # Push all the rows to the top of the scroll area
         self.gallery_layout.addStretch()
 
     # --- UI Helper Methods ---
 
     def open_full_image(self, image_path):
         """Spawns the modal image viewer when a thumbnail is clicked."""
-        self.viewer = ImageViewer(image_path, self)
-        self.viewer.exec_() # exec_() halts the main UI until the popup is closed
+        # Check the state of current_view safely, defaulting to 'home'
+        is_trash = (getattr(self, 'current_view', 'home') == "trash")
+        
+        self.viewer = ImageViewer(image_path, is_trash=is_trash, parent=self)
+        self.viewer.exec_()
 
     def create_separator_line(self):
         line = QFrame()
