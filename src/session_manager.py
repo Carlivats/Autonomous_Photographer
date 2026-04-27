@@ -117,7 +117,7 @@ class CaptureSessionManager(QObject):
             reason = f"Bad exposure: {metrics.get('exposure_status')}"
         elif metrics.get("blur_status") != "Clear":
             reason = f"Motion blur: {metrics.get('blur_status')}"
-        elif isinstance(metrics.get("sharpness"), (int, float)) and metrics.get("sharpness") < 100:
+        elif isinstance(metrics.get("sharpness"), (int, float)) and metrics.get("sharpness") < config.SHARPNESS_THRESHOLD:
             reason = f"Subject too soft. Sharpness: {metrics.get('sharpness')}"
 
         if reason:
