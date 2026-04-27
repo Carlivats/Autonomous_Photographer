@@ -97,7 +97,7 @@ class SettingsUI(QWidget):
         settings_layout.addStretch()
 
         # Save Button
-        self.btn_save = QPushButton("Save & Apply Settings")
+        self.btn_save = QPushButton("Apply Settings")
         self.btn_save.setFixedHeight(60)
         self.btn_save.setStyleSheet("""
             QPushButton { background-color: #27ae60; color: white; font-size: 20px; font-weight: bold; border-radius: 8px; }
