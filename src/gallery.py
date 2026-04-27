@@ -1,37 +1,47 @@
 import os
 from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QVBoxLayout, 
-                             QHBoxLayout, QGridLayout, QScrollArea, QFrame, QSizePolicy)
-from PyQt5.QtCore import Qt, QSize, QRect, QFileSystemWatcher
+                             QHBoxLayout, QGridLayout, QScrollArea, QFrame, QSizePolicy, QDialog)
+from PyQt5.QtCore import Qt, QSize, QRect, QFileSystemWatcher, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 
 class ImageThumbLabel(QLabel):
     """A custom label that loads an image, scales it, and center-crops it to fit a fixed box."""
+    
+    # Define a custom signal that emits the file path when clicked
+    clicked = pyqtSignal(str) 
+
     def __init__(self, image_path, w, h):
         super().__init__()
         self.image_path = image_path
         
-        # Lock the size exactly so the layout manager cannot squish it
         self.setFixedSize(w, h)
         self.setStyleSheet("background-color: #2c3038; border-radius: 4px;")
         self.setAlignment(Qt.AlignCenter)
+        
+        # Change the cursor to a pointing hand so the user knows it's clickable
+        self.setCursor(Qt.PointingHandCursor)
 
         # Load and crop the image
         original_pixmap = QPixmap(self.image_path)
         if not original_pixmap.isNull():
             target_size = QSize(w, h)
-            # Scale up to cover the box completely
             scaled = original_pixmap.scaled(
                 target_size, 
                 Qt.KeepAspectRatioByExpanding, 
                 Qt.SmoothTransformation
             )
-            # Crop off the excess from the center
             crop_rect = QRect(
                 (scaled.width() - w) // 2,
                 (scaled.height() - h) // 2,
                 w, h
             )
             self.setPixmap(scaled.copy(crop_rect))
+
+    # Catch the mouse click and emit our custom signal
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.image_path)
+        super().mousePressEvent(event)
 
 class GalleryUI(QWidget):
     # 1. Add gallery_dir=None to the parameters
@@ -191,6 +201,9 @@ class GalleryUI(QWidget):
 
             # Create the thumbnail with strict dimensions
             thumb = ImageThumbLabel(file_path, item_width, TARGET_HEIGHT)
+
+            thumb.clicked.connect(self.open_full_image)
+            
             current_row_layout.addWidget(thumb)
             
             current_row_width += (item_width + SPACING)
@@ -204,6 +217,11 @@ class GalleryUI(QWidget):
         self.gallery_layout.addStretch()
 
     # --- UI Helper Methods ---
+
+    def open_full_image(self, image_path):
+        """Spawns the modal image viewer when a thumbnail is clicked."""
+        self.viewer = ImageViewer(image_path, self)
+        self.viewer.exec_() # exec_() halts the main UI until the popup is closed
 
     def create_separator_line(self):
         line = QFrame()
@@ -247,3 +265,42 @@ class GalleryUI(QWidget):
                 QPushButton:hover { color: white; background-color: #1c2024; border-radius: 6px;}
             """)
         return btn
+    
+class ImageViewer(QDialog):
+    """A full-screen popup to view the high-res image."""
+    def __init__(self, image_path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Full Image")
+        self.resize(1024, 600) # Match your main app size
+        
+        # Frameless window for a slick, immersive look
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setStyleSheet("background-color: rgba(10, 12, 16, 240);") # Dark, slightly transparent background
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.img_label = QLabel()
+        self.img_label.setAlignment(Qt.AlignCenter)
+        
+        # Give a visual cue that clicking closes it
+        self.img_label.setCursor(Qt.PointingHandCursor)
+
+        # Load the full, uncropped image
+        pixmap = QPixmap(image_path)
+        if not pixmap.isNull():
+            # Scale it down so it fits nicely inside the screen without getting cut off
+            scaled_pixmap = pixmap.scaled(
+                self.size(), 
+                Qt.KeepAspectRatio, 
+                Qt.SmoothTransformation
+            )
+            self.img_label.setPixmap(scaled_pixmap)
+
+        # Allow clicking the image to close the viewer
+        self.img_label.mousePressEvent = self.close_viewer
+
+        layout.addWidget(self.img_label)
+
+    def close_viewer(self, event):
+        self.close()
