@@ -37,7 +37,6 @@ class ImageThumbLabel(QLabel):
             )
             self.setPixmap(scaled.copy(crop_rect))
 
-    # Catch the mouse click and emit our custom signal
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit(self.image_path)
