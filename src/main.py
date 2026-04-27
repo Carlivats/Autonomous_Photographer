@@ -10,6 +10,7 @@ from PyQt5.QtGui import QPixmap, QIcon
 from vision import CameraWorker
 from session_manager import CaptureSessionManager
 from gallery import GalleryUI
+from settings import SettingsUI
 
 
 class AutonomousPhotographerUI(QWidget):
@@ -215,6 +216,11 @@ class AutonomousPhotographerUI(QWidget):
 
     def open_settings(self):
         print("Opening Settings...")
+        # Create an instance of the Settings UI
+        self.settings_window = SettingsUI()
+        
+        # Show the settings window
+        self.settings_window.show()
 
     def open_gallery(self):
         print("Opening Gallery...")
